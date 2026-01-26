@@ -1,0 +1,43 @@
+const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
+const config = require("../config");
+const { createStyledEmbed } = require("../utils/embedCreator");
+
+module.exports = {
+  data: new SlashCommandBuilder()
+    .setName("notes")
+    .setDescription("View the latest Orbit update notes"),
+
+  async execute(interaction) {
+    const v = config.bot.version;
+    const date = config.notes?.releaseDate || "Unknown date";
+    const title = config.notes?.title || "ORBIT UPDATE NOTES";
+
+    // If you want the same “big header” style as guardian patch notes:
+    const embed = new EmbedBuilder()
+      .setTitle(`◥◣ ${title} v${v} ◢◤`)
+      .setColor(config.theme.SECONDARY)
+      .setDescription(`*Released on ${date}*\n\nLatest updates to the Orbit system:\n`)
+      .setFooter({
+        text: config.branding?.footerText || "🛰️ ORBIT OPERATIONS SYSTEM",
+        iconURL: interaction.client.user.displayAvatarURL()
+      })
+      .setTimestamp();
+
+    const sections = Array.isArray(config.notes?.sections) ? config.notes.sections : [];
+    if (sections.length) {
+      embed.addFields(...sections.map(s => ({
+        name: s.name,
+        value: s.value,
+        inline: false
+      })));
+    } else {
+      embed.addFields({
+        name: "📌 Notes",
+        value: "No release notes configured in config.notes.sections yet.",
+        inline: false
+      });
+    }
+
+    return interaction.reply({ embeds: [embed], ephemeral: true });
+  }
+};

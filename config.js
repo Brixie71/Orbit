@@ -1,36 +1,55 @@
 module.exports = {
-  // -------------------- THEME / BRANDING --------------------
   theme: {
-    PRIMARY: "#0B1220",     // Orbit dark navy (embed base)
-    SECONDARY: "#1E90FF",   // Orbit blue accent (highlights)
-    SUCCESS: "#22C55E",     // Green
-    WARNING: "#FACC15",     // Yellow
-    ERROR: "#EF4444"        // Red
+    PRIMARY: "#0B1220",
+    SECONDARY: "#1E90FF",
+    SUCCESS: "#22C55E",
+    WARNING: "#FACC15",
+    ERROR: "#EF4444"
   },
 
   branding: {
     name: "ORBIT",
     systemName: "🛰️ ORBIT OPERATIONS SYSTEM",
-    footerText: "🛰️ ORBIT OPERATIONS SYSTEM",
-    // Optional: if you want a consistent icon instead of bot avatar
-    // iconURL: "https://..."
+    footerText: "🛰️ ORBIT OPERATIONS SYSTEM"
   },
 
-  // -------------------- ORG STRUCTURE (optional: keep if you still use it) --------------------
-  // You can rename/repurpose these later; leaving structure intact avoids breaking other code.
-  companies: {
-    Alpha: { prefix: "A", color: "#EF4444", motto: "First in, Last out." },
-    Bravo: { prefix: "B", color: "#3B82F6", motto: "Swift and Decisive." },
-    Charlie: { prefix: "C", color: "#22C55E", motto: "Anywhere, Anytime." },
-    Delta: { prefix: "D", color: "#FACC15", motto: "Force Multiplied." },
-    Echo:  { prefix: "E", color: "#A855F7", motto: "Beyond Limits." }
-  },
-
-  // -------------------- BOT CONFIG --------------------
   bot: {
-    version: "1.2.0 - ORBIT OPS UPDATE",
+    version: "1.1.3", // <= bump this when you deploy updates
     status: "OPERATIONAL",
     activity: "Orbit Ops Net // Standing by"
+  },
+
+  // NEW: patch notes used by /notes + startup announcements
+  notes: {
+    releaseDate: "January 26, 2026",
+    title: "ORBIT UPDATE NOTES",
+    sections: [
+      {
+        name: "🧾 Startup Notification",
+        value:
+          "• Added Startup Channel Notification"
+      },
+      {
+        name: "🧾 Event Request System",
+        value:
+          "• Command : /eventrequest\n" +
+          "• Added Preview → Confirm dispatch flow\n" +
+          "• Added cooldowns + duplicate detection"
+      },
+      {
+        name: "🔒 Safety & Controls",
+        value:
+          "• Channel lock for /eventrequest\n" +
+          "• AllowedMentions hardened (no @everyone injection)\n" +
+          "• Rate-limits on commands"
+      },
+      {
+        name: "🧾 Server List",
+        value:
+          "• Command : /server list\n" +
+          "• Added server code selection + /server list"
+      }
+    ]
   },
 
   // -------------------- OPS DEFAULTS (used by /eventrequest or future features) --------------------
@@ -43,5 +62,4 @@ module.exports = {
      // NEW: restrict /eventrequest usage
     eventRequestChannelId: "1464991886560329951"
   }
-  
 };
