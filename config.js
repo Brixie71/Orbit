@@ -35,12 +35,13 @@ module.exports = {
 
   // -------------------- OPS DEFAULTS (used by /eventrequest or future features) --------------------
   ops: {
-    // Cooldowns (ms)
-    userCooldownMs: 60_000,        // 1 min per-user submit cooldown
-    channelCooldownMs: 15_000,     // 15s per-channel dispatch cooldown
-    duplicateWindowMs: 5 * 60_000, // 5 minutes duplicate denial window
+    userCooldownMs: 60_000,        // 1 min anti-spam
+    channelCooldownMs: 30_000,     // 30 sec anti-flood
+    duplicateWindowMs: 5 * 60_000,// 30 min duplicate guard
+    previewExpiryMs: 5 * 60_000,   // 30 min confirm window
 
-    // Confirmation preview expiry (ms)
-    previewExpiryMs: 2 * 60_000
+     // NEW: restrict /eventrequest usage
+    eventRequestChannelId: "1464991886560329951"
   }
+  
 };

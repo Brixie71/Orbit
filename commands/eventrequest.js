@@ -119,7 +119,6 @@ function signatureOf({ requestType, unix, serverKey }) {
   return `${requestType}|${unix}|${serverKey}`;
 }
 
-// strict conditional requirements
 function validateStrict({ execution, tzRaw, timeRaw, dayRaw, dateRaw }) {
   if (execution === "now") return { ok: true };
 
@@ -139,6 +138,8 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName("eventrequest")
     .setDescription("Submit an operational event request (Orbit strict + confirm).")
+
+    // REQUIRED FIRST (Discord requirement)
     .addStringOption(opt =>
       opt.setName("request")
         .setDescription("Operation / Event type")
@@ -178,8 +179,20 @@ module.exports = {
           { name: "Training Server (Bootcamp)", value: "training" }
         )
     )
+    .addStringOption(opt =>
+      opt.setName("location")
+        .setDescription("Muster location / venue")
+        .setRequired(true)
+        .setMaxLength(120)
+    )
+    .addStringOption(opt =>
+      opt.setName("details")
+        .setDescription("SITREP / intent / notes")
+        .setRequired(true)
+        .setMaxLength(1500)
+    )
 
-    // Conditional (enforced in execute)
+    // OPTIONAL AFTER REQUIRED (Discord requirement)
     .addStringOption(opt =>
       opt.setName("timezone")
         .setDescription('Timezone offset (e.g. "GMT+8", "+08:00", "UTC-5")')
@@ -200,26 +213,6 @@ module.exports = {
       opt.setName("date")
         .setDescription('Date (MM/DD/YYYY) FUTURE only')
         .setRequired(false)
-    )
-
-    // Strict form required:
-    .addStringOption(opt =>
-      opt.setName("location")
-        .setDescription("Muster location / venue")
-        .setRequired(true)
-        .setMaxLength(120)
-    )
-    .addStringOption(opt =>
-      opt.setName("strength")
-        .setDescription('Strength required (e.g. "8", "2 squads", "10+")')
-        .setRequired(true)
-        .setMaxLength(60)
-    )
-    .addStringOption(opt =>
-      opt.setName("details")
-        .setDescription("SITREP / intent / notes")
-        .setRequired(true)
-        .setMaxLength(1500)
     ),
 
   async execute(interaction) {
@@ -230,9 +223,17 @@ module.exports = {
       });
     }
 
+    const allowedChannelId = config.ops?.eventRequestChannelId;
+
+    if (allowedChannelId && interaction.channelId !== allowedChannelId) {
+      return interaction.reply({
+        content: `⛔ This command can only be used in <#${allowedChannelId}>.`,
+        ephemeral: true
+      });
+    }
+
     const client = interaction.client;
 
-    // Lazy init stores (so you don't have to touch index.js if you don't want)
     if (!client.pendingEventRequests) client.pendingEventRequests = new Map();
     if (!client.recentEventSignatures) client.recentEventSignatures = new Map();
     if (!client.channelCooldown) client.channelCooldown = new Map();
@@ -242,14 +243,13 @@ module.exports = {
     const execution = interaction.options.getString("execution", true);
     const serverKey = interaction.options.getString("server", true);
 
+    const location = interaction.options.getString("location", true).trim();
+    const details = interaction.options.getString("details", true).trim();
+
     const tzRaw = interaction.options.getString("timezone");
     const timeRaw = interaction.options.getString("time");
     const dayRaw = interaction.options.getString("day");
     const dateRaw = interaction.options.getString("date");
-
-    const location = interaction.options.getString("location", true).trim();
-    const strength = interaction.options.getString("strength", true).trim();
-    const details = interaction.options.getString("details", true).trim();
 
     const opsCfg = config.ops || {};
     const userCooldownMs = opsCfg.userCooldownMs ?? 60_000;
@@ -257,7 +257,7 @@ module.exports = {
     const duplicateWindowMs = opsCfg.duplicateWindowMs ?? (5 * 60_000);
     const previewExpiryMs = opsCfg.previewExpiryMs ?? (2 * 60_000);
 
-    // Per-user: only one pending preview at a time
+    // one pending preview per user
     for (const [, p] of client.pendingEventRequests) {
       if (p.userId === interaction.user.id && p.expiresAt > Date.now()) {
         return interaction.reply({
@@ -267,7 +267,7 @@ module.exports = {
       }
     }
 
-    // Per-user submit cooldown
+    // user submit cooldown
     const lastSubmit = client.userSubmitCooldown.get(interaction.user.id) || 0;
     if (Date.now() - lastSubmit < userCooldownMs) {
       const wait = Math.ceil((userCooldownMs - (Date.now() - lastSubmit)) / 1000);
@@ -281,9 +281,7 @@ module.exports = {
     if (!strict.ok) return interaction.reply({ content: strict.msg, ephemeral: true });
 
     const server = SERVER_CODES.find(s => s.key === serverKey);
-    if (!server) {
-      return interaction.reply({ content: `${WARN} Unknown server selection.`, ephemeral: true });
-    }
+    if (!server) return interaction.reply({ content: `${WARN} Unknown server selection.`, ephemeral: true });
 
     // Build UNIX time
     let unix;
@@ -337,7 +335,7 @@ module.exports = {
       });
     }
 
-    // Duplicate detection (type + unix + serverKey)
+    // Duplicate detection
     const sig = signatureOf({ requestType, unix, serverKey });
     const lastSig = client.recentEventSignatures.get(sig) || 0;
     if (Date.now() - lastSig < duplicateWindowMs) {
@@ -352,7 +350,7 @@ module.exports = {
     const availableRoleIds = configuredRoleIds.filter(id => interaction.guild.roles.cache.has(id));
     const notifyLine = availableRoleIds.length ? availableRoleIds.map(roleMention).join(" ") : "None";
 
-    // Embed (preview)
+    // Embed preview
     const embed = createStyledEmbed(
       "OPS REQUEST // PREVIEW",
       "Review the details. Confirm to dispatch chain pings.",
@@ -361,21 +359,15 @@ module.exports = {
       { name: "REQUEST", value: formatType(requestType), inline: true },
       { name: "EXECUTION", value: execution.toUpperCase(), inline: true },
       { name: "TIME (AUTO-LOCAL)", value: stamp(unix), inline: false },
-
       { name: "SERVER", value: `**${server.name}**\n\`${server.code}\``, inline: false },
-
       { name: "LOCATION", value: location, inline: true },
-      { name: "STRENGTH", value: strength, inline: true },
-
       { name: "REQUESTOR", value: `${interaction.user}`, inline: true },
       { name: "TZ INPUT", value: tzLabel, inline: true },
-
       { name: "CHAIN NOTIFY", value: notifyLine, inline: false },
       { name: "DETAILS / SITREP", value: details, inline: false }
     );
 
-    // Confirm/Cancel buttons
-    const token = `${interaction.user.id}.${Date.now()}`; // simple token; good enough for short-lived previews
+    const token = `${interaction.user.id}.${Date.now()}`;
 
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
@@ -388,18 +380,16 @@ module.exports = {
         .setStyle(ButtonStyle.Secondary)
     );
 
-    // Store pending payload for confirm step
+    // Store pending
     client.userSubmitCooldown.set(interaction.user.id, Date.now());
 
     client.pendingEventRequests.set(token, {
       userId: interaction.user.id,
       channelId: interaction.channelId,
       expiresAt: Date.now() + previewExpiryMs,
-
       signature: sig,
       duplicateWindowMs,
       channelCooldownMs,
-
       finalContent: `${NOTIFY_PREFIX}: ${notifyLine}`,
       finalEmbed: embed,
       allowedMentions: { roles: availableRoleIds, parse: [] }
