@@ -26,12 +26,8 @@ module.exports = {
       subcommand.setName("list").setDescription("List all available server codes")
     ),
 
-  // optional: lets your interactionCreate handler decide (if you use that pattern)
-  // ephemeral: false,
-
   async execute(interaction) {
     const subcommand = interaction.options.getSubcommand();
-
     if (subcommand !== "list") return;
 
     const serverEmbed = createStyledEmbed(
@@ -49,13 +45,10 @@ module.exports = {
       });
     }
 
-    const payload = { embeds: [serverEmbed], ephemeral: false }; // 👈 public
-
-    // If your global handler already deferred, you must editReply instead of reply.
+    // PUBLIC by default (no ephemeral flag)
     if (interaction.deferred || interaction.replied) {
-      await interaction.editReply(payload);
-    } else {
-      await interaction.reply(payload);
+      return interaction.editReply({ embeds: [serverEmbed] });
     }
+    return interaction.reply({ embeds: [serverEmbed] });
   },
 };
