@@ -73,6 +73,7 @@ function checkRateLimit(interaction) {
   return { ok: true };
 }
 
+
 // -------------------- LOAD COMMANDS --------------------
 const commands = [];
 const commandsPath = path.join(__dirname, "commands");
@@ -97,10 +98,17 @@ const eventsPath = path.join(__dirname, "events");
 if (fs.existsSync(eventsPath)) {
   const eventFiles = fs.readdirSync(eventsPath).filter(f => f.endsWith(".js"));
 
+  const loadedEventNames = new Set();
+
   for (const file of eventFiles) {
     const event = require(path.join(eventsPath, file));
-
     if (!event?.name || typeof event.execute !== "function") continue;
+
+    if (loadedEventNames.has(event.name)) {
+      console.warn(`[WARN] Duplicate event "${event.name}" found in "${file}". Skipping.`);
+      continue;
+    }
+    loadedEventNames.add(event.name);
 
     if (event.once) {
       client.once(event.name, (...args) => event.execute(...args));
@@ -109,6 +117,7 @@ if (fs.existsSync(eventsPath)) {
     }
   }
 }
+
 
 // -------------------- READY (REGISTER ONLY) --------------------
 client.once(Events.ClientReady, async (c) => {
