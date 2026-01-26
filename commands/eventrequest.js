@@ -215,20 +215,22 @@ module.exports = {
         .setRequired(false)
     ),
 
+  // All responses for this command should stay ephemeral.
+
+  ephemeral: true,
+
   async execute(interaction) {
     if (!interaction.inGuild()) {
-      return interaction.reply({
-        content: `${WARN} Submit requests inside a server; DMs are not supported.`,
-        ephemeral: true
+      return interaction.editReply({
+        content: `${WARN} Submit requests inside a server; DMs are not supported.`
       });
     }
 
     const allowedChannelId = config.ops?.eventRequestChannelId;
 
     if (allowedChannelId && interaction.channelId !== allowedChannelId) {
-      return interaction.reply({
+      return interaction.editReply({
         content: `⛔ This command can only be used in <#${allowedChannelId}>.`,
-        ephemeral: true
       });
     }
 
@@ -260,9 +262,8 @@ module.exports = {
     // one pending preview per user
     for (const [, p] of client.pendingEventRequests) {
       if (p.userId === interaction.user.id && p.expiresAt > Date.now()) {
-        return interaction.reply({
+        return interaction.editReply({
           content: `${WARN} You already have a pending request preview. Confirm or cancel it first.`,
-          ephemeral: true
         });
       }
     }
@@ -271,17 +272,20 @@ module.exports = {
     const lastSubmit = client.userSubmitCooldown.get(interaction.user.id) || 0;
     if (Date.now() - lastSubmit < userCooldownMs) {
       const wait = Math.ceil((userCooldownMs - (Date.now() - lastSubmit)) / 1000);
-      return interaction.reply({
+      return interaction.editReply({
         content: `⏳ Cooldown active. Try again in ${wait}s.`,
-        ephemeral: true
       });
     }
 
     const strict = validateStrict({ execution, tzRaw, timeRaw, dayRaw, dateRaw });
-    if (!strict.ok) return interaction.reply({ content: strict.msg, ephemeral: true });
+    if (!strict.ok) {
+      return interaction.editReply({ content: strict.msg });
+    }
 
     const server = SERVER_CODES.find(s => s.key === serverKey);
-    if (!server) return interaction.reply({ content: `${WARN} Unknown server selection.`, ephemeral: true });
+    if (!server) {
+      return interaction.editReply({ content: `${WARN} Unknown server selection.` });
+    }
 
     // Build UNIX time
     let unix;
@@ -292,23 +296,21 @@ module.exports = {
     } else {
       const offsetMinutes = parseTimezoneOffsetToMinutes(tzRaw);
       if (offsetMinutes === null) {
-        return interaction.reply({
+        return interaction.editReply({
           content: `${WARN} Invalid timezone. Use "GMT+8", "+08:00", "UTC-5".`,
-          ephemeral: true
         });
       }
 
       const t = parseTimeHHMM(timeRaw);
       if (!t) {
-        return interaction.reply({
+        return interaction.editReply({
           content: `${WARN} Invalid time. Use HH:MM (e.g. 10:00).`,
-          ephemeral: true
         });
       }
 
       const hour24 = to24h(t.hh, dayRaw);
       if (hour24 === null) {
-        return interaction.reply({ content: `${WARN} Day must be AM or PM.`, ephemeral: true });
+        return interaction.editReply({ content: `${WARN} Day must be AM or PM.` });
       }
 
       let ymd;
@@ -317,9 +319,8 @@ module.exports = {
       } else {
         const d = parseDateMMDDYYYY(dateRaw);
         if (!d) {
-          return interaction.reply({
+          return interaction.editReply({
             content: `${WARN} Invalid date. Use MM/DD/YYYY (e.g. 01/25/2026).`,
-            ephemeral: true
           });
         }
         ymd = d;
@@ -339,9 +340,8 @@ module.exports = {
     const sig = signatureOf({ requestType, unix, serverKey });
     const lastSig = client.recentEventSignatures.get(sig) || 0;
     if (Date.now() - lastSig < duplicateWindowMs) {
-      return interaction.reply({
+      return interaction.editReply({
         content: `${WARN} Duplicate detected (same request + time + server within window). Denied.`,
-        ephemeral: true
       });
     }
 
@@ -395,11 +395,10 @@ module.exports = {
       allowedMentions: { roles: availableRoleIds, parse: [] }
     });
 
-    return interaction.reply({
+    return interaction.editReply({
       content: "📝 **Preview generated.** Confirm to dispatch.",
       embeds: [embed],
       components: [row],
-      ephemeral: true
     });
   }
 };

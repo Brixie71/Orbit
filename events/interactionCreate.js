@@ -16,9 +16,12 @@ module.exports = {
         const ephemeral =
           typeof command.ephemeral === "boolean" ? command.ephemeral : false;
 
+        // Commands can opt out of auto-deferral (e.g., quick public replies).
+        const shouldDefer =
+          !command.noDefer && !interaction.deferred && !interaction.replied;
+
         // Acknowledge quickly to avoid "Unknown interaction" on slow commands.
-        // Only defer if the command hasn't already replied (it shouldn't have yet).
-        if (!interaction.deferred && !interaction.replied) {
+        if (shouldDefer) {
           await interaction.deferReply({ ephemeral });
         }
 
