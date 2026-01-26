@@ -57,12 +57,7 @@ module.exports = {
     if (!client.channelCooldown) client.channelCooldown = new Map();
 
     const payload = client.pendingEventRequests.get(token);
-    if (!payload) {
-      return interaction.reply({
-        content: "⚠️ This request preview expired or was already processed.",
-        ephemeral: true,
-      });
-    }
+    if (!payload) return interaction.deferUpdate();
 
     // Only requester can confirm/cancel
     if (payload.userId !== interaction.user.id) {
