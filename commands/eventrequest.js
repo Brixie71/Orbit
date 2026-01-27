@@ -145,7 +145,7 @@ module.exports = {
         .setDescription("Operation / Event type")
         .setRequired(true)
         .addChoices(
-          { name: "Raid", value: "raid" },
+          { name: "Compound Raid", value: "raid" },
           { name: "RGE Deployment", value: "rge_deployment" },
           { name: "Bunker Raid", value: "bunker_raid" },
           { name: "Deployment", value: "deployment" },
@@ -156,7 +156,7 @@ module.exports = {
           { name: "Trident Tryout", value: "trident_tryout" },
           { name: "Apollo Tryout", value: "apollo_tryout" },
           { name: "Minotaur Tryout", value: "minotaur_tryout" },
-          { name: "TAU Tryout", value: "tau_tryout" }
+          { name: "Tactical Aviaton Unit Tryout", value: "tau_tryout" }
         )
     )
     .addStringOption(opt =>
@@ -166,7 +166,7 @@ module.exports = {
         .addChoices(
           { name: "NOW", value: "now" },
           { name: "TODAY", value: "today" },
-          { name: "FUTURE", value: "future" }
+          { name: "CUSTOM", value: "future" }
         )
     )
     .addStringOption(opt =>

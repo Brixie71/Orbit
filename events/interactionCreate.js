@@ -1,31 +1,46 @@
-const { Events } = require("discord.js");
+const { Events, MessageFlags } = require("discord.js");
 
 module.exports = {
   name: Events.InteractionCreate,
   async execute(interaction) {
+    // ---------------- RATE LIMIT (GLOBAL) ----------------
+    const rlFn = interaction.client.checkRateLimit;
+    if (typeof rlFn === "function") {
+      const rl = rlFn(interaction);
+      if (rl && rl.ok === false) {
+        const seconds = Math.max(1, Math.ceil((rl.retryAfterMs || 0) / 1000));
+        const content = `⛔ Rate limit hit. Try again in **${seconds}s**.`;
+
+        // Must respond safely depending on interaction state
+        if (!interaction.deferred && !interaction.replied) {
+          return interaction.reply({ content, flags: MessageFlags.Ephemeral });
+        }
+        if (interaction.deferred && !interaction.replied) {
+          return interaction.editReply({ content });
+        }
+        return interaction.followUp({ content, flags: MessageFlags.Ephemeral });
+      }
+    }
+
     // ---------------- SLASH ----------------
     if (interaction.isChatInputCommand()) {
       const command = interaction.client.commands.get(interaction.commandName);
       if (!command) return;
 
       try {
-        // Per-command ephemeral control:
-        // - command.ephemeral = true  => only requester sees it
-        // - command.ephemeral = false => public in channel
-        // Default: PUBLIC
-        const ephemeral =
+        // Per-command ephemeral control (default PUBLIC)
+        const isEphemeral =
           typeof command.ephemeral === "boolean" ? command.ephemeral : false;
 
-        // Commands can opt out of auto-deferral (e.g., quick public replies).
         const shouldDefer =
           !command.noDefer && !interaction.deferred && !interaction.replied;
 
-        // Acknowledge quickly to avoid "Unknown interaction" on slow commands.
         if (shouldDefer) {
-          await interaction.deferReply({ ephemeral });
+          await interaction.deferReply({
+            flags: isEphemeral ? MessageFlags.Ephemeral : undefined,
+          });
         }
 
-        // IMPORTANT: Inside commands, prefer interaction.editReply()/followUp()
         await command.execute(interaction);
       } catch (err) {
         console.error(err);
@@ -35,9 +50,9 @@ module.exports = {
           if (interaction.deferred && !interaction.replied) {
             await interaction.editReply({ content: msg });
           } else if (interaction.replied || interaction.deferred) {
-            await interaction.followUp({ content: msg, ephemeral: true });
+            await interaction.followUp({ content: msg, flags: MessageFlags.Ephemeral });
           } else {
-            await interaction.reply({ content: msg, ephemeral: true });
+            await interaction.reply({ content: msg, flags: MessageFlags.Ephemeral });
           }
         } catch (e) {
           console.error("Failed to respond to interaction error:", e);
@@ -62,24 +77,21 @@ module.exports = {
     const payload = client.pendingEventRequests.get(token);
     if (!payload) return interaction.deferUpdate();
 
-    // Only requester can confirm/cancel
     if (payload.userId !== interaction.user.id) {
       return interaction.reply({
         content: "⛔ You can’t confirm/cancel someone else’s request.",
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
-    // Expired
     if (payload.expiresAt <= Date.now()) {
       client.pendingEventRequests.delete(token);
       return interaction.reply({
         content: "⚠️ This request preview expired. Submit again.",
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
-    // Cancel
     if (id.startsWith("evreq_cancel:")) {
       client.pendingEventRequests.delete(token);
       return interaction.update({
@@ -89,7 +101,6 @@ module.exports = {
       });
     }
 
-    // Confirm: channel cooldown
     const lastConfirmed = client.channelCooldown.get(payload.channelId) || 0;
     if (Date.now() - lastConfirmed < payload.channelCooldownMs) {
       const wait = Math.ceil(
@@ -97,24 +108,21 @@ module.exports = {
       );
       return interaction.reply({
         content: `⏳ Channel cooldown active. Try again in ${wait}s.`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
-    // Confirm: duplicate detection
     const lastSig = client.recentEventSignatures.get(payload.signature) || 0;
     if (Date.now() - lastSig < payload.duplicateWindowMs) {
       return interaction.reply({
         content: "⚠️ Duplicate detected (same request + time + server). Denied.",
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
-    // Mark
     client.channelCooldown.set(payload.channelId, Date.now());
     client.recentEventSignatures.set(payload.signature, Date.now());
 
-    // Dispatch message to channel
     try {
       await interaction.channel.send({
         content: payload.finalContent,
@@ -131,11 +139,10 @@ module.exports = {
       });
     } catch (err) {
       console.error(err);
-      // If the button interaction was already updated/replied somehow, avoid double-ack
       if (interaction.deferred || interaction.replied) return;
       return interaction.reply({
         content: "⚠️ Failed to dispatch. Check bot permissions in this channel.",
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
   },

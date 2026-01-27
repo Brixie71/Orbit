@@ -1,4 +1,5 @@
-const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
+const { SlashCommandBuilder } = require("discord.js");
+const { createStyledEmbed } = require("../utils/embedCreator");
 const config = require("../config");
 
 module.exports = {
@@ -6,42 +7,70 @@ module.exports = {
     .setName("notes")
     .setDescription("View the latest Orbit update notes"),
 
-  // Set to true if you want notes private; false = public
-  ephemeral: false,
+  // Notes are informational → public by default
+  noDefer: true,
 
   async execute(interaction) {
-    const v = config.bot?.version ?? "?.?.?";
-    const date = config.notes?.releaseDate || "Unknown date";
-    const title = config.notes?.title || "ORBIT UPDATE NOTES";
+    const version = config.bot?.version ?? "?.?.?";
+    const releaseDate = config.notes?.releaseDate ?? "Unknown date";
+    const sections = Array.isArray(config.notes?.sections)
+      ? config.notes.sections
+      : [];
 
-    const embed = new EmbedBuilder()
-      .setTitle(`◥◣ ${title} v${v} ◢◤`)
-      .setColor(config.theme.SECONDARY)
-      .setDescription(`*Released on ${date}*\n\nLatest updates to the Orbit system:\n`)
-      .setFooter({
-        text: config.branding?.footerText || "🛰️ ORBIT OPERATIONS SYSTEM",
-        iconURL: interaction.client.user.displayAvatarURL(),
-      })
-      .setTimestamp();
+    const embed = createStyledEmbed(
+      `📝 ORBIT UPDATE NOTES`,
+      [
+        `**Version \`${version}\`**`,
+        `Released on **${releaseDate}**`,
+        "",
+        "—",
+      ].join("\n"),
+      config.theme.SECONDARY
+    );
 
-    const sections = Array.isArray(config.notes?.sections) ? config.notes.sections : [];
-    if (sections.length) {
-      embed.addFields(
-        ...sections.map((s) => ({
-          name: s.name,
-          value: s.value,
-          inline: false,
-        }))
-      );
-    } else {
+    // Meta row (acts like padding/header)
+    embed.addFields(
+      {
+        name: "📦 Scope",
+        value: "System & command updates",
+        inline: true,
+      },
+      {
+        name: "🛰️ Source",
+        value: "Orbit Core",
+        inline: true,
+      }
+    );
+
+    embed.addFields({ name: "—", value: " ", inline: false });
+
+    if (!sections.length) {
       embed.addFields({
         name: "📌 Notes",
-        value: "No release notes configured in config.notes.sections yet.",
+        value: "No release notes configured.",
         inline: false,
       });
+    } else {
+      // Render sections with controlled spacing
+      for (const section of sections) {
+        embed.addFields({
+          name: section.name,
+          value: section.value,
+          inline: false,
+        });
+
+        // Separator after each section to simulate margin
+        embed.addFields({ name: "—", value: " ", inline: false });
+      }
     }
 
-    // Handler deferred already → editReply, not reply
-    return interaction.editReply({ embeds: [embed] });
+    embed.setFooter({
+      text: "🛰️ ORBIT OPERATIONS SYSTEM",
+      iconURL: interaction.client.user.displayAvatarURL(),
+    });
+
+    embed.setTimestamp();
+
+    return interaction.reply({ embeds: [embed] });
   },
 };

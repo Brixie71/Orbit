@@ -22,15 +22,11 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName("server")
     .setDescription("Display server codes")
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName("list")
-        .setDescription("List all available server codes")
+    .addSubcommand((subcommand) =>
+      subcommand.setName("list").setDescription("List all BRM5 server codes")
     ),
 
-  // 🔑 CRITICAL:
   // This command must NOT be deferred by interactionCreate.js
-  // or it will be stuck ephemeral forever.
   noDefer: true,
 
   async execute(interaction) {
@@ -38,24 +34,70 @@ module.exports = {
     if (subcommand !== "list") return;
 
     const embed = createStyledEmbed(
-      "🛰️ SERVER CODES",
-      "Below are all approved server codes for operations:",
+      "🛰️ UNIED DIVISIONS OF DEFENSE SERVER CODES",
+      [
+        "**Approved server registry**",
+        "Use these codes for system linking and operational routing.",
+        "",
+        "—",
+      ].join("\n"),
       config.theme.SECONDARY
     );
 
-    for (const key of Object.keys(serverCodes)) {
-      const srv = serverCodes[key];
-      embed.addFields({
-        name: `✅ ${srv.name}`,
-        value: `**SERVER CODE:**\n\`\`\`\n${srv.code}\n\`\`\``,
-        inline: false,
-      });
+    // Optional: add a compact “header row” as fields (looks like padding)
+    embed.addFields(
+      {
+        name: "📌 Format",
+        value: "`SERVER NAME` → code block",
+        inline: true,
+      },
+      {
+        name: "🔐 Handling",
+        value: "Do not share publicly.",
+        inline: true,
+      }
+    );
+
+    embed.addFields({ name: "—", value: " ", inline: false });
+
+    const entries = Object.values(serverCodes);
+
+    // Use inline fields (2 columns) for better spacing on desktop
+    // and keep code blocks short and clean.
+    for (let i = 0; i < entries.length; i += 2) {
+      const left = entries[i];
+      const right = entries[i + 1];
+
+      embed.addFields(
+        {
+          name: `✅ ${left.name}`,
+          value: `\`\`\`\n${left.code}\n\`\`\``,
+          inline: true,
+        },
+        right
+          ? {
+              name: `✅ ${right.name}`,
+              value: `\`\`\`\n${right.code}\n\`\`\``,
+              inline: true,
+            }
+          : {
+              name: "\u200B",
+              value: "\u200B",
+              inline: true,
+            }
+      );
+
+      // Add a thin separator after each row to simulate padding/margins
+      if (i + 2 < entries.length) {
+        embed.addFields({ name: "—", value: " ", inline: false });
+      }
     }
 
-    // ✅ PUBLIC RESPONSE (no ephemeral, no flags)
-    // Since noDefer=true, this is safe.
-    return interaction.reply({
-      embeds: [embed],
+    embed.setFooter({
+      text: "🛰️ ORBIT • Server Registry",
+      iconURL: interaction.client.user.displayAvatarURL(),
     });
+
+    return interaction.reply({ embeds: [embed] });
   },
 };

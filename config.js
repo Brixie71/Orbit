@@ -39,8 +39,7 @@ module.exports = {
       {
         name: "🔒 Safety & Controls",
         value:
-          "• Channel lock for /eventrequest\n" +
-          "• AllowedMentions hardened (no @everyone injection)\n" +
+          "• AllowedMentions hardened\n" +
           "• Rate-limits on commands"
       },
       {

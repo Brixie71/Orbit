@@ -73,6 +73,7 @@ function checkRateLimit(interaction) {
   return { ok: true };
 }
 
+client.checkRateLimit = checkRateLimit;
 
 // -------------------- LOAD COMMANDS --------------------
 const commands = [];
