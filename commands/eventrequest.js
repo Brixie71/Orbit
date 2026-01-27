@@ -2,7 +2,8 @@ const {
   SlashCommandBuilder,
   ActionRowBuilder,
   ButtonBuilder,
-  ButtonStyle
+  ButtonStyle,
+  ChannelType
 } = require("discord.js");
 
 const { createStyledEmbed } = require("../utils/embedCreator");
@@ -122,12 +123,12 @@ function signatureOf({ requestType, unix, serverKey }) {
 function validateStrict({ execution, tzRaw, timeRaw, dayRaw, dateRaw }) {
   if (execution === "now") return { ok: true };
 
-  if (!tzRaw) return { ok: false, msg: `${WARN} Timezone is required for TODAY/FUTURE.` };
-  if (!timeRaw) return { ok: false, msg: `${WARN} Time is required for TODAY/FUTURE.` };
-  if (!dayRaw) return { ok: false, msg: `${WARN} AM/PM is required for TODAY/FUTURE.` };
+  if (!tzRaw) return { ok: false, msg: `${WARN} Timezone is required for TODAY/CUSTOM.` };
+  if (!timeRaw) return { ok: false, msg: `${WARN} Time is required for TODAY/CUSTOM.` };
+  if (!dayRaw) return { ok: false, msg: `${WARN} AM/PM is required for TODAY/CUSTOM.` };
 
   if (execution === "future" && !dateRaw) {
-    return { ok: false, msg: `${WARN} Date is required for FUTURE (MM/DD/YYYY).` };
+    return { ok: false, msg: `${WARN} Date is required for CUSTOM (MM/DD/YYYY).` };
   }
 
   return { ok: true };
@@ -156,7 +157,7 @@ module.exports = {
           { name: "Trident Tryout", value: "trident_tryout" },
           { name: "Apollo Tryout", value: "apollo_tryout" },
           { name: "Minotaur Tryout", value: "minotaur_tryout" },
-          { name: "Tactical Aviaton Unit Tryout", value: "tau_tryout" }
+          { name: "Tactical Aviation Unit Tryout", value: "tau_tryout" }
         )
     )
     .addStringOption(opt =>
@@ -179,12 +180,15 @@ module.exports = {
           { name: "Training Server (Bootcamp)", value: "training" }
         )
     )
-    .addStringOption(opt =>
-      opt.setName("location")
-        .setDescription("Muster location / venue")
+
+    // ✅ VC dropdown (Voice/Stage only)
+    .addChannelOption(opt =>
+      opt.setName("vc")
+        .setDescription("Select the Voice Channel muster location")
         .setRequired(true)
-        .setMaxLength(120)
+        .addChannelTypes(ChannelType.GuildVoice, ChannelType.GuildStageVoice)
     )
+
     .addStringOption(opt =>
       opt.setName("details")
         .setDescription("SITREP / intent / notes")
@@ -211,12 +215,11 @@ module.exports = {
     )
     .addStringOption(opt =>
       opt.setName("date")
-        .setDescription('Date (MM/DD/YYYY) FUTURE only')
+        .setDescription('Date (MM/DD/YYYY) CUSTOM only')
         .setRequired(false)
     ),
 
-  // All responses for this command should stay ephemeral.
-
+  // all responses for this command should stay ephemeral
   ephemeral: true,
 
   async execute(interaction) {
@@ -227,7 +230,6 @@ module.exports = {
     }
 
     const allowedChannelId = config.ops?.eventRequestChannelId;
-
     if (allowedChannelId && interaction.channelId !== allowedChannelId) {
       return interaction.editReply({
         content: `⛔ This command can only be used in <#${allowedChannelId}>.`,
@@ -245,7 +247,10 @@ module.exports = {
     const execution = interaction.options.getString("execution", true);
     const serverKey = interaction.options.getString("server", true);
 
-    const location = interaction.options.getString("location", true).trim();
+    // ✅ VC channel
+    const vcChannel = interaction.options.getChannel("vc", true);
+    const vc = `<#${vcChannel.id}>`;
+
     const details = interaction.options.getString("details", true).trim();
 
     const tzRaw = interaction.options.getString("timezone");
@@ -360,7 +365,7 @@ module.exports = {
       { name: "EXECUTION", value: execution.toUpperCase(), inline: true },
       { name: "TIME (AUTO-LOCAL)", value: stamp(unix), inline: false },
       { name: "SERVER", value: `**${server.name}**\n\`${server.code}\``, inline: false },
-      { name: "LOCATION", value: location, inline: true },
+      { name: "VOICE CHANNEL", value: vc, inline: true },
       { name: "REQUESTOR", value: `${interaction.user}`, inline: true },
       { name: "TZ INPUT", value: tzLabel, inline: true },
       { name: "CHAIN NOTIFY", value: notifyLine, inline: false },

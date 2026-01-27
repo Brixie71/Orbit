@@ -1,6 +1,16 @@
-const { SlashCommandBuilder } = require("discord.js");
+const { SlashCommandBuilder, AttachmentBuilder } = require("discord.js");
 const { createStyledEmbed } = require("../utils/embedCreator");
 const config = require("../config");
+const path = require("path");
+
+function safeAttach(filePath, name) {
+  try {
+    const abs = path.join(process.cwd(), filePath);
+    return new AttachmentBuilder(abs, { name });
+  } catch {
+    return null;
+  }
+}
 
 // Orbit server registry
 const serverCodes = {
@@ -34,7 +44,7 @@ module.exports = {
     if (subcommand !== "list") return;
 
     const embed = createStyledEmbed(
-      "🛰️ UNIED DIVISIONS OF DEFENSE SERVER CODES",
+      "🛰️ UNITED DIVISIONS OF DEFENSE SERVER CODES",
       [
         "**Approved server registry**",
         "Use these codes for system linking and operational routing.",
@@ -44,7 +54,17 @@ module.exports = {
       config.theme.SECONDARY
     );
 
-    // Optional: add a compact “header row” as fields (looks like padding)
+    // ✅ Add local banner (if available)
+    // Make sure config.assets.serverBannerPath points to something like: "assets/server.png"
+    const serverBanner = safeAttach(
+      config.assets?.serverBannerPath,
+      "server.png"
+    );
+    if (serverBanner) {
+      embed.setImage("attachment://server.png");
+    }
+
+    // Header row
     embed.addFields(
       {
         name: "📌 Format",
@@ -62,8 +82,7 @@ module.exports = {
 
     const entries = Object.values(serverCodes);
 
-    // Use inline fields (2 columns) for better spacing on desktop
-    // and keep code blocks short and clean.
+    // Two-column layout
     for (let i = 0; i < entries.length; i += 2) {
       const left = entries[i];
       const right = entries[i + 1];
@@ -87,7 +106,6 @@ module.exports = {
             }
       );
 
-      // Add a thin separator after each row to simulate padding/margins
       if (i + 2 < entries.length) {
         embed.addFields({ name: "—", value: " ", inline: false });
       }
@@ -98,6 +116,10 @@ module.exports = {
       iconURL: interaction.client.user.displayAvatarURL(),
     });
 
-    return interaction.reply({ embeds: [embed] });
+    // ✅ Reply with embed + optional attached banner file
+    return interaction.reply({
+      embeds: [embed],
+      files: serverBanner ? [serverBanner] : [],
+    });
   },
 };
