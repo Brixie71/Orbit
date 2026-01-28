@@ -19,8 +19,13 @@ if (!GUILD_ID) throw new Error("Missing GUILD_ID");
 
 // -------------------- CLIENT --------------------
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds]
-});
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildVoiceStates, // REQUIRED for VC stability
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
+  ]
+}); 
 
 client.commands = new Collection();
 
