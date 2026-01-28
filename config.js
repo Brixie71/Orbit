@@ -1,3 +1,4 @@
+// config.js (ORBIT v1.1.5)
 module.exports = {
   theme: {
     PRIMARY: "#0B1220",
@@ -14,15 +15,13 @@ module.exports = {
   },
 
   bot: {
-    version: "1.1.4", // <= bump this when you deploy updates
+    version: "1.1.5", // ✅ bumped for this release
     status: "OPERATIONAL",
     activity: "Orbit Ops Net // Standing by",
   },
 
-  // NEW: local asset paths (relative to project root)
-  // Use these with AttachmentBuilder + attachment://filename.png
+  // Local asset paths (relative to project root)
   assets: {
-    // Put these files in /assets/
     startupBannerPath: "banner/UDOD_ORBIT.png",
     notesBannerPath: "banner/UDOD_ORBIT.png",
     serverBannerPath: "banner/server.png",
@@ -30,7 +29,7 @@ module.exports = {
 
   // Patch notes used by /notes + startup announcements
   notes: {
-    releaseDate: "January 26, 2026",
+    releaseDate: "January 28, 2026",
     title: "ORBIT UPDATE NOTES",
     sections: [
       {
@@ -40,9 +39,23 @@ module.exports = {
       {
         name: "🧾 Event Request System",
         value:
-          "• Command : /eventrequest\n" +
-          "• Added Preview → Confirm dispatch flow\n" +
-          "• Added cooldowns + duplicate detection",
+          "• Command: /eventrequest\n" +
+          "• Preview → Confirm dispatch flow\n" +
+          "• Cooldowns + duplicate detection\n" +
+          "• Discord timestamp formatting for cross-timezone viewing",
+      },
+      {
+        name: "🛡️ LinkGuard + Whitelists",
+        value:
+          "• LinkGuard re-added (domain filtering)\n" +
+          "• Whitelist support restored (trusted media domains)\n" +
+          "• Blacklist enforcement (hard block)",
+      },
+      {
+        name: "🧊 Inactivity Tracking",
+        value:
+          "• Auto-mark inactive members via role + nickname prefix\n" +
+          "• Tracks last activity (server-side) for inactivity evaluation",
       },
       {
         name: "🔒 Safety & Controls",
@@ -53,28 +66,42 @@ module.exports = {
       {
         name: "🧾 Server List",
         value:
-          "• Command : /server list\n" +
-          "• Added server code selection + /server list",
+          "• Command: /server list\n" +
+          "• Server code selection + registry display",
+      },
+      {
+        name: "🔇 Removed",
+        value: "• Text-to-Speech removed",
       },
     ],
   },
 
-  // OPS DEFAULTS (used by /eventrequest or future features)
+  // OPS defaults (used by /eventrequest or future features)
   ops: {
-    userCooldownMs: 60_000,              // 1 min anti-spam
-    channelCooldownMs: 30_000,           // 30 sec anti-flood
+    userCooldownMs: 60_000,              // 1 min anti-spam (command submit)
+    channelCooldownMs: 30_000,           // 30 sec anti-flood (confirm dispatch)
     duplicateWindowMs: 30 * 60_000,      // 30 min duplicate guard
     previewExpiryMs: 30 * 60_000,        // 30 min confirm window
 
     // Restrict /eventrequest usage
     eventRequestChannelId: "1464991886560329951",
   },
-  
+
+  // Inactivity feature (role + nickname prefix)
   inactivity: {
     enabled: true,
     thresholdDays: 30,
     scanEveryMinutes: 60,
     roleName: "INACTIVE",
-    nicknamePrefix: "INACTIVE | "
+    nicknamePrefix: "INACTIVE | ",
+  },
+
+  // LinkGuard feature toggle defaults (if you want config-driven behavior later)
+  linkguard: {
+    enabledByDefault: false, // default state when guild has no stored settings
+    allowWhitelistedDomains: true,
+    // Optional: show short warning message in channel after deletion
+    warnInChannel: true,
+    warnDeleteAfterMs: 5000,
   },
 };
