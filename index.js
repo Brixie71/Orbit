@@ -162,3 +162,4 @@ process.on("unhandledRejection", (reason) => console.error("Unhandled Rejection:
 process.on("uncaughtException", (err) => console.error("Uncaught Exception:", err));
 
 client.login(TOKEN);
+console.log("Loaded commands:", commands.map(c => c.name));

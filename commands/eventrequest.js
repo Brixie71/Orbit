@@ -354,25 +354,48 @@ module.exports = {
     const configuredRoleIds = REQUEST_ROLE_ID_MAP[requestType] || [];
     const availableRoleIds = configuredRoleIds.filter(id => interaction.guild.roles.cache.has(id));
     const notifyLine = availableRoleIds.length ? availableRoleIds.map(roleMention).join(" ") : "None";
+
+    // --- Embed preview (UPDATED LAYOUT) ---
     const requesterName =
     interaction.member?.displayName ??
     interaction.user.username;
+
+    const hasTimezone =
+    tzRaw && tzRaw.trim() && tzRaw.trim().toUpperCase() !== "N/A";
     
-    // Embed preview
     const embed = createStyledEmbed(
       "OPS REQUEST // PREVIEW",
       "Review the details. Confirm to dispatch chain pings.",
       config.theme.PRIMARY
     ).addFields(
-      { name: "REQUEST", value: formatType(requestType), inline: true },
-      { name: "EXECUTION", value: execution.toUpperCase(), inline: true },
+      // Top: Requested by
+      { name: "REQUESTED BY", value: requesterName, inline: false },
+    
+      // Operation + When
+      { name: "OPERATION", value: formatType(requestType), inline: true },
+      { name: "WHEN", value: execution.toUpperCase(), inline: true },
+    
+      // Time (auto-local stays)
       { name: "TIME (AUTO-LOCAL)", value: stamp(unix), inline: false },
+    
+      // Server stays
       { name: "SERVER", value: `**${server.name}**\n\`${server.code}\``, inline: false },
+    
+      // Voice channel stays
       { name: "VOICE CHANNEL", value: vc, inline: true },
-      { name: "REQUESTOR", value: requesterName, inline: true },
-      { name: "TZ INPUT", value: tzLabel, inline: true },
-      { name: "CHAIN NOTIFY", value: notifyLine, inline: false },
-      { name: "DETAILS / SITREP", value: details, inline: false }
+    
+      // Timezone (hide if not set)
+      ...(hasTimezone ? [{ name: "TIMEZONE", value: tzRaw.trim(), inline: true }] : []),
+    
+      // Request sent to (chain notify)
+      { name: "REQUEST SENT TO:", value: notifyLine, inline: false },
+    
+      // Details / SITREP emphasized
+      {
+        name: "⚠️ DETAILS / SITREP",
+        value: `> ${details.replace(/\n/g, "\n> ")}`,
+        inline: false
+      }
     );
 
     const token = `${interaction.user.id}.${Date.now()}`;

@@ -1,12 +1,17 @@
 // events/messageCreate.js
 const { Events, PermissionFlagsBits } = require("discord.js");
 const { getGuildSettings } = require("../utils/guildSettings");
+const { touchMemberActivity } = require("../utils/activity");
 
 module.exports = {
   name: Events.MessageCreate,
   async execute(message) {
     if (!message.guild || message.author.bot) return;
 
+    // ✅ Track "last seen (Orbit)" on any message
+    touchMemberActivity(message.guildId, message.author.id, Date.now());
+
+    // -------------------- Anti-spam (existing) --------------------
     const settings = getGuildSettings(message.guildId);
     if (!settings?.antispam_enabled) return;
 
@@ -15,12 +20,11 @@ module.exports = {
     if (member?.permissions?.has(PermissionFlagsBits.ManageMessages)) return;
 
     // Tunables
-    const WINDOW_MS = 6000;   // rolling window
-    const MAX_MSG = 5;        // max messages in window
-    const DUP_MS = 15000;     // duplicate window
-    const MAX_DUP = 3;        // duplicate count
+    const WINDOW_MS = 6000;
+    const MAX_MSG = 5;
+    const DUP_MS = 15000;
+    const MAX_DUP = 3;
 
-    // State store (memory)
     const spam = message.client._orbitSpam || (message.client._orbitSpam = new Map());
     const key = `${message.guildId}:${message.author.id}`;
 
@@ -32,11 +36,9 @@ module.exports = {
       lastDupAt: 0,
     };
 
-    // Flood detection
     entry.times = entry.times.filter((t) => now - t < WINDOW_MS);
     entry.times.push(now);
 
-    // Duplicate detection
     const text = (message.content || "").trim();
     if (text && text === entry.lastText && now - entry.lastDupAt < DUP_MS) {
       entry.dupCount += 1;
@@ -54,11 +56,10 @@ module.exports = {
 
     if (!isFlood && !isDupSpam) return;
 
-    // Action
     try {
       await message.delete();
     } catch {
-      return; // missing perms
+      return;
     }
 
     const reason = isFlood ? "message flooding" : "duplicate spam";

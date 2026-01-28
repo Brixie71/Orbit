@@ -69,4 +69,12 @@ module.exports = {
     // Restrict /eventrequest usage
     eventRequestChannelId: "1464991886560329951",
   },
+  
+  inactivity: {
+    enabled: true,
+    thresholdDays: 30,
+    scanEveryMinutes: 60,
+    roleName: "INACTIVE",
+    nicknamePrefix: "INACTIVE | "
+  },
 };

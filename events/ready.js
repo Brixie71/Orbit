@@ -114,4 +114,11 @@ module.exports = {
       await channel.send({ embeds: [notesEmbed] });
     }
   },
+  inactivity: {
+    enabled: true,
+    thresholdDays: 30,
+    scanEveryMinutes: 60,
+    roleName: "INACTIVE",
+    nicknamePrefix: "INACTIVE | "
+  },
 };
