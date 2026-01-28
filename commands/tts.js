@@ -12,7 +12,7 @@ const {
     entersState,
   } = require("@discordjs/voice");
   
-  const { TTSManager } = require("../utils/ttsManager");
+  const { TTSManager } = require("../utils/ttsManager.js");
   
   function getTTS(client) {
     if (!client.tts) client.tts = new TTSManager();
@@ -21,7 +21,7 @@ const {
   
   module.exports = {
     data: new SlashCommandBuilder()
-      .setName("tts")
+      .setName("orbit-tts")
       .setDescription("Orbit TTS controls")
       .addSubcommand((s) => s.setName("join").setDescription("Join your voice channel"))
       .addSubcommand((s) =>
@@ -89,7 +89,7 @@ const {
   
         if (active && !tts.isConnected(interaction.guildId)) {
           return interaction.editReply({
-            content: "⚠️ Orbit must be in a VC first. Use `/tts join`.",
+            content: "⚠️ Orbit must be in a VC first. Use `/orbit-tts join`.",
             flags: MessageFlags.Ephemeral,
           });
         }

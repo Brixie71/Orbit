@@ -32,6 +32,10 @@ const REQUEST_ROLE_ID_MAP = {
   tau_tryout: ["1130164014652084365"]
 };
 
+const requesterName =
+    interaction.member?.displayName ??
+    interaction.user.username;
+
 const WARN = "⚠️";
 const NOTIFY_PREFIX = "📡 CHAIN NOTIFY";
 const roleMention = (id) => `<@&${id}>`;
@@ -366,7 +370,7 @@ module.exports = {
       { name: "TIME (AUTO-LOCAL)", value: stamp(unix), inline: false },
       { name: "SERVER", value: `**${server.name}**\n\`${server.code}\``, inline: false },
       { name: "VOICE CHANNEL", value: vc, inline: true },
-      { name: "REQUESTOR", value: `${interaction.user}`, inline: true },
+      { name: "REQUESTOR", value: requesterName, inline: true },
       { name: "TZ INPUT", value: tzLabel, inline: true },
       { name: "CHAIN NOTIFY", value: notifyLine, inline: false },
       { name: "DETAILS / SITREP", value: details, inline: false }
