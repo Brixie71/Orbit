@@ -40,8 +40,8 @@ const {
           )
       )
       .addSubcommand((s) => s.setName("leave").setDescription("Leave VC"))
-      .addSubcommand((s) => s.setName("clear").setDescription("Clear the TTS queue"))
-      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+      .addSubcommand((s) => s.setName("clear").setDescription("Clear the TTS queue")),
+      //.setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
   
     ephemeral: true,
   
