@@ -32,10 +32,6 @@ const REQUEST_ROLE_ID_MAP = {
   tau_tryout: ["1130164014652084365"]
 };
 
-const requesterName =
-    interaction.member?.displayName ??
-    interaction.user.username;
-
 const WARN = "⚠️";
 const NOTIFY_PREFIX = "📡 CHAIN NOTIFY";
 const roleMention = (id) => `<@&${id}>`;
@@ -358,7 +354,10 @@ module.exports = {
     const configuredRoleIds = REQUEST_ROLE_ID_MAP[requestType] || [];
     const availableRoleIds = configuredRoleIds.filter(id => interaction.guild.roles.cache.has(id));
     const notifyLine = availableRoleIds.length ? availableRoleIds.map(roleMention).join(" ") : "None";
-
+    const requesterName =
+    interaction.member?.displayName ??
+    interaction.user.username;
+    
     // Embed preview
     const embed = createStyledEmbed(
       "OPS REQUEST // PREVIEW",
