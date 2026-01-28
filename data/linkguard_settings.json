@@ -1,3 +1,10 @@
 {
-  "guilds": {}
+  "guilds": {
+    "745769689854246942": {
+      "enabled": true,
+      "channels": {},
+      "exemptRoles": [],
+      "restrictRoles": []
+    }
+  }
 }

@@ -24,7 +24,7 @@ module.exports = {
       if (hit) {
         await message.delete().catch(() => {});
         await message.author
-          .send(`⚠️ Your message was removed. Blacklisted domain detected: \`${hit.domain}\``)
+          .send(`⚠️ Your message was removed. Blacklisted domain detected: \`${hit.domain}\`, Dont do that again! or I'll Mute you until 12/31/2099. Try me. Orbit System Out!`)
           .catch(() => {});
         return;
       }
