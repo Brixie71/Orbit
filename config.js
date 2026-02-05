@@ -15,16 +15,9 @@ module.exports = {
   },
 
   bot: {
-    version: "1.1.5", // ✅ bumped for this release
+    version: "1.1.6", // ✅ bumped for this release
     status: "OPERATIONAL",
-    activity: "Orbit Ops Net // Standing by",
-  },
-
-  // Local asset paths (relative to project root)
-  assets: {
-    startupBannerPath: "banner/UDOD_ORBIT.png",
-    notesBannerPath: "banner/UDOD_ORBIT.png",
-    serverBannerPath: "banner/server.png",
+    activity: "Orbit System Operational // Standing by",
   },
 
   // Patch notes used by /notes + startup announcements

@@ -40,7 +40,7 @@ module.exports = {
 
     // ============= 1) STARTUP EMBED (single chat) =============
     const startupEmbed = createStyledEmbed(
-      "✧ ORBIT UPDATED! ✧",
+      " ORBIT UPDATED! ",
       "`SYSTEM ONLINE`\n\nOrbit systems have been updated and are now operational.",
       config.theme.PRIMARY
     );
@@ -70,15 +70,6 @@ module.exports = {
       })
       .setTimestamp();
 
-    // Optional startup banner (local file)
-    const startupBanner = safeAttach(config.assets?.startupBannerPath, "startup-banner.png");
-    if (startupBanner) {
-      startupEmbed.setImage("attachment://startup-banner.png");
-      await channel.send({ embeds: [startupEmbed], files: [startupBanner] });
-    } else {
-      await channel.send({ embeds: [startupEmbed] });
-    }
-
     // ============= 2) NOTES EMBED (separate chat) =============
     const sections = Array.isArray(config.notes?.sections) ? config.notes.sections : [];
     const releaseDate = config.notes?.releaseDate ?? "Unknown date";
@@ -104,15 +95,6 @@ module.exports = {
         iconURL: client.user.displayAvatarURL(),
       })
       .setTimestamp();
-
-    // Optional notes banner (local file)
-    const notesBanner = safeAttach(config.assets?.notesBannerPath, "notes-banner.png");
-    if (notesBanner) {
-      notesEmbed.setImage("attachment://notes-banner.png");
-      await channel.send({ embeds: [notesEmbed], files: [notesBanner] });
-    } else {
-      await channel.send({ embeds: [notesEmbed] });
-    }
   },
   inactivity: {
     enabled: true,
