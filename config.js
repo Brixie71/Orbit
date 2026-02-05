@@ -32,7 +32,9 @@ module.exports = {
           "• Default allow list: Google Docs/Drive + Medal\n" +
           "• Blocks blacklisted subdomains + URL path prefixes\n" +
           "• Detects bare links (no http/https)\n" +
-          "• Cleaner in-channel warnings for blocked links",
+          "• Cleaner in-channel warnings for blocked links\n" +
+          "• Admin-only /linkguard responses are now ephemeral\n" +
+          "• Non-admin blacklist warnings are simplified",
       },
     ],
   },
