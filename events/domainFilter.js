@@ -1,5 +1,5 @@
 // events/domainFilter.js
-const { Events } = require("discord.js");
+const { Events, PermissionFlagsBits } = require("discord.js");
 const {
   findBlacklistedInMessage,
   extractUrls,
@@ -18,22 +18,22 @@ module.exports = {
       if (message.author.bot) return;
 
       const content = message.content || "";
+      const member = message.member;
+      const isAdmin =
+        !!member &&
+        (member.permissions.has(PermissionFlagsBits.Administrator) ||
+          member.permissions.has(PermissionFlagsBits.ManageGuild));
 
       // 1) Always block blacklisted domains (regardless of LinkGuard on/off)
       const hit = findBlacklistedInMessage(content);
       if (hit) {
         await message.delete().catch(() => {});
-        const matchLabel = hit.matchType === "path" ? "link" : "domain";
-        const matchValue = hit.match || hit.domain;
-
-        await message.author
-          .send(`⚠️ Your message was removed. Blacklisted ${matchLabel} detected: \`${matchValue}\`, Dont do that again! or I'll Mute you until 12/31/2099. Try me. Orbit System Out!`)
-          .catch(() => {});
-
-        await message.channel
-          .send(`🛡️ ${message.author} blacklisted ${matchLabel} blocked.`)
-          .then((m) => setTimeout(() => m.delete().catch(() => {}), 5000))
-          .catch(() => {});
+        if (!isAdmin) {
+          await message.channel
+            .send("⚠️ The Link you sent is a Blacklisted domain.")
+            .then((m) => setTimeout(() => m.delete().catch(() => {}), 5000))
+            .catch(() => {});
+        }
         return;
       }
 
@@ -48,7 +48,6 @@ module.exports = {
 
       if (!effectiveEnabled) return;
 
-      const member = message.member;
       if (!member) return;
 
       const exemptRoles = store.getExemptRoles(guildId);
