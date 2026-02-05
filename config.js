@@ -15,56 +15,24 @@ module.exports = {
   },
 
   bot: {
-    version: "1.1.6", // ✅ bumped for this release
+    version: "1.1.7", // ✅ bumped for this release
     status: "OPERATIONAL",
     activity: "Orbit System Operational // Standing by",
   },
 
   // Patch notes used by /notes + startup announcements
   notes: {
-    releaseDate: "January 28, 2026",
+    releaseDate: "February 5, 2026",
     title: "ORBIT UPDATE NOTES",
     sections: [
       {
-        name: "🧾 Startup Notification",
-        value: "• Added Startup Channel Notification",
-      },
-      {
-        name: "🧾 Event Request System",
+        name: "🛡️ LinkGuard Update",
         value:
-          "• Command: /eventrequest\n" +
-          "• Preview → Confirm dispatch flow\n" +
-          "• Cooldowns + duplicate detection\n" +
-          "• Discord timestamp formatting for cross-timezone viewing",
-      },
-      {
-        name: "🛡️ LinkGuard + Whitelists",
-        value:
-          "• LinkGuard re-added (domain filtering)\n" +
-          "• Whitelist support restored (trusted media domains)\n" +
-          "• Blacklist enforcement (hard block)",
-      },
-      {
-        name: "🧊 Inactivity Tracking",
-        value:
-          "• Auto-mark inactive members via role + nickname prefix\n" +
-          "• Tracks last activity (server-side) for inactivity evaluation",
-      },
-      {
-        name: "🔒 Safety & Controls",
-        value:
-          "• AllowedMentions hardened\n" +
-          "• Rate-limits on commands",
-      },
-      {
-        name: "🧾 Server List",
-        value:
-          "• Command: /server list\n" +
-          "• Server code selection + registry display",
-      },
-      {
-        name: "🔇 Removed",
-        value: "• Text-to-Speech removed",
+          "• Added whitelist support (trusted domains)\n" +
+          "• Default allow list: Google Docs/Drive + Medal\n" +
+          "• Blocks blacklisted subdomains + URL path prefixes\n" +
+          "• Detects bare links (no http/https)\n" +
+          "• Cleaner in-channel warnings for blocked links",
       },
     ],
   },
