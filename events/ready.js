@@ -28,7 +28,7 @@ function buildCompactNotesText(sections, maxLinesPerSection = 3) {
 }
 
 module.exports = {
-  name: "ready",
+  name: "clientReady",
   once: true,
   async execute(client) {
     console.log(`Ready! Logged in as ${client.user.tag}`);
@@ -95,6 +95,10 @@ module.exports = {
         iconURL: client.user.displayAvatarURL(),
       })
       .setTimestamp();
+
+    // Send both embeds to the channel
+    await channel.send({ embeds: [startupEmbed] });
+    await channel.send({ embeds: [notesEmbed] });
   },
   inactivity: {
     enabled: true,
