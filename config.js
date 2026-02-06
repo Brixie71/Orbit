@@ -22,7 +22,7 @@ module.exports = {
 
   // Patch notes used by /notes + startup announcements
   notes: {
-    releaseDate: "February 5, 2026",
+    releaseDate: "February 6, 2026",
     title: "ORBIT UPDATE NOTES",
     sections: [
       {
@@ -35,6 +35,14 @@ module.exports = {
           "• Cleaner in-channel warnings for blocked links\n" +
           "• Admin-only /linkguard responses are now ephemeral\n" +
           "• Non-admin blacklist warnings are simplified",
+      },
+      {
+        name: "🛰️ Server Codes",
+        value:
+          "• Server codes now stored in database\n" +
+          "• New admin commands: /server add, /server update, /server delete, /server rename\n" +
+          "• Confirmation required for add/update/delete/rename\n" +
+          "• Autocomplete selector for update/delete/rename",
       },
     ],
   },
