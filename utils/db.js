@@ -19,6 +19,13 @@ CREATE TABLE IF NOT EXISTS member_activity (
   last_seen_ms INTEGER NOT NULL,
   PRIMARY KEY (guild_id, user_id)
 );
+
+-- Server codes registry
+CREATE TABLE IF NOT EXISTS server_codes (
+  server_key TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  code TEXT NOT NULL
+);
 `);
 
 module.exports = db;

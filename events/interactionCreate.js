@@ -22,6 +22,19 @@ module.exports = {
       }
     }
 
+    // ---------------- AUTOCOMPLETE ----------------
+    if (interaction.isAutocomplete()) {
+      const command = interaction.client.commands.get(interaction.commandName);
+      if (!command || typeof command.autocomplete !== "function") return;
+
+      try {
+        await command.autocomplete(interaction);
+      } catch (err) {
+        console.error("Autocomplete error:", err);
+      }
+      return;
+    }
+
     // ---------------- SLASH ----------------
     if (interaction.isChatInputCommand()) {
       const command = interaction.client.commands.get(interaction.commandName);
