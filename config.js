@@ -15,7 +15,7 @@ module.exports = {
   },
 
   bot: {
-    version: "1.1.7", // ✅ bumped for this release
+    version: "1.1.8", // ✅ bumped for this release
     status: "OPERATIONAL",
     activity: "Orbit System Operational // Standing by",
   },
