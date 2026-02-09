@@ -2,19 +2,12 @@ const {
   SlashCommandBuilder,
   ActionRowBuilder,
   ButtonBuilder,
-  ButtonStyle,
-  ChannelType
+  ButtonStyle
 } = require("discord.js");
 
 const { createStyledEmbed } = require("../utils/embedCreator");
 const config = require("../config");
-
-// -------------------- SERVER CODES --------------------
-const SERVER_CODES = [
-  { key: "max", name: "Max's Server", code: "f58edae9-f816-4755-a34b-f6463f71dc8d" },
-  { key: "tingles", name: "Tingles's Server (SOCOM)", code: "ec2a20ce-805a-4d0c-b755-4d4d2884f80c" },
-  { key: "training", name: "Training Server (Bootcamp)", code: "1a32536a-63d3-4d43-8465-d16c9636a629" }
-];
+const { listServerCodes, getServerCode } = require("../utils/serverCodes");
 
 // -------------------- ROLE IDS --------------------
 const REQUEST_ROLE_ID_MAP = {
@@ -36,6 +29,30 @@ const WARN = "⚠️";
 const NOTIFY_PREFIX = "📡 CHAIN NOTIFY";
 const roleMention = (id) => `<@&${id}>`;
 const formatType = (t) => t.replace(/_/g, " ").toUpperCase();
+
+function buildServerChoiceName(row) {
+  const label = row.name;
+  return label.length <= 100 ? label : `${label.slice(0, 97)}...`;
+}
+
+function buildServerAutocompleteChoices(rows, focused) {
+  const needle = (focused || "").toLowerCase();
+
+  return rows
+    .filter((row) => {
+      if (!needle) return true;
+      return (
+        row.server_key.toLowerCase().includes(needle) ||
+        row.name.toLowerCase().includes(needle) ||
+        row.code.toLowerCase().includes(needle)
+      );
+    })
+    .slice(0, 25)
+    .map((row) => ({
+      name: buildServerChoiceName(row),
+      value: row.server_key,
+    }));
+}
 
 // -------------------- TIME HELPERS --------------------
 function parseTimezoneOffsetToMinutes(tzRaw) {
@@ -172,21 +189,9 @@ module.exports = {
     )
     .addStringOption(opt =>
       opt.setName("server")
-        .setDescription("Target server code")
+        .setDescription("Target server")
         .setRequired(true)
-        .addChoices(
-          { name: "Max's Server", value: "max" },
-          { name: "Tingles's Server (SOCOM)", value: "tingles" },
-          { name: "Training Server (Bootcamp)", value: "training" }
-        )
-    )
-
-    // ✅ VC dropdown (Voice/Stage only)
-    .addChannelOption(opt =>
-      opt.setName("vc")
-        .setDescription("Select the Voice Channel muster location")
-        .setRequired(true)
-        .addChannelTypes(ChannelType.GuildVoice, ChannelType.GuildStageVoice)
+        .setAutocomplete(true)
     )
 
     .addStringOption(opt =>
@@ -222,6 +227,13 @@ module.exports = {
   // all responses for this command should stay ephemeral
   ephemeral: true,
 
+  async autocomplete(interaction) {
+    const focused = interaction.options.getFocused();
+    const rows = listServerCodes();
+    const choices = buildServerAutocompleteChoices(rows, focused);
+    return interaction.respond(choices);
+  },
+
   async execute(interaction) {
     if (!interaction.inGuild()) {
       return interaction.editReply({
@@ -246,10 +258,6 @@ module.exports = {
     const requestType = interaction.options.getString("request", true);
     const execution = interaction.options.getString("execution", true);
     const serverKey = interaction.options.getString("server", true);
-
-    // ✅ VC channel
-    const vcChannel = interaction.options.getChannel("vc", true);
-    const vc = `<#${vcChannel.id}>`;
 
     const details = interaction.options.getString("details", true).trim();
 
@@ -287,7 +295,7 @@ module.exports = {
       return interaction.editReply({ content: strict.msg });
     }
 
-    const server = SERVER_CODES.find(s => s.key === serverKey);
+    const server = getServerCode(serverKey);
     if (!server) {
       return interaction.editReply({ content: `${WARN} Unknown server selection.` });
     }
@@ -379,10 +387,7 @@ module.exports = {
       { name: "TIME (AUTO-LOCAL)", value: stamp(unix), inline: false },
     
       // Server stays
-      { name: "SERVER", value: `**${server.name}**\n\`${server.code}\``, inline: false },
-    
-      // Voice channel stays
-      { name: "VOICE CHANNEL", value: vc, inline: true },
+      { name: "SERVER", value: `**${server.name}**`, inline: false },
     
       // Timezone (hide if not set)
       ...(hasTimezone ? [{ name: "TIMEZONE", value: tzRaw.trim(), inline: true }] : []),

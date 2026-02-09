@@ -15,34 +15,29 @@ module.exports = {
   },
 
   bot: {
-    version: "1.1.8", // ✅ bumped for this release
+    version: "1.1.9", // ✅ bumped for this release
     status: "OPERATIONAL",
     activity: "Orbit System Operational // Standing by",
   },
 
   // Patch notes used by /notes + startup announcements
   notes: {
-    releaseDate: "February 6, 2026",
+    releaseDate: "February 9, 2026",
     title: "ORBIT UPDATE NOTES",
     sections: [
       {
-        name: "🛡️ LinkGuard Update",
+        name: "🛰️ Event Requests",
         value:
-          "• Added whitelist support (trusted domains)\n" +
-          "• Default allow list: Google Docs/Drive + Medal\n" +
-          "• Blocks blacklisted subdomains + URL path prefixes\n" +
-          "• Detects bare links (no http/https)\n" +
-          "• Cleaner in-channel warnings for blocked links\n" +
-          "• Admin-only /linkguard responses are now ephemeral\n" +
-          "• Non-admin blacklist warnings are simplified",
+          "• Server selector now pulls from the SQLite registry with autocomplete\n" +
+          "• Preview shows the chosen server name only for clarity\n" +
+          "• Voice channel selection removed to streamline submissions",
       },
       {
-        name: "🛰️ Server Codes",
+        name: "🛰️ Server Registry",
         value:
-          "• Server codes now stored in database\n" +
-          "• New admin commands: /server add, /server update, /server delete, /server rename\n" +
-          "• Confirmation required for add/update/delete/rename\n" +
-          "• Autocomplete selector for update/delete/rename",
+          "• /server add/update/delete/rename manage codes in the SQLite registry\n" +
+          "• Autocomplete for selecting servers on update/delete/rename\n" +
+          "• Registry powers event request server selection",
       },
     ],
   },
