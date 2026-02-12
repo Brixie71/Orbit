@@ -104,22 +104,19 @@ const eventsPath = path.join(__dirname, "events");
 if (fs.existsSync(eventsPath)) {
   const eventFiles = fs.readdirSync(eventsPath).filter(f => f.endsWith(".js"));
 
-  const loadedEventNames = new Set();
-
   for (const file of eventFiles) {
     const event = require(path.join(eventsPath, file));
-    if (!event?.name || typeof event.execute !== "function") continue;
-
-    if (loadedEventNames.has(event.name)) {
-      console.warn(`[WARN] Duplicate event "${event.name}" found in "${file}". Skipping.`);
+    if (!event?.name || typeof event.execute !== "function") {
+      console.warn(`[WARN] Event file "${file}" is missing name/execute. Skipping.`);
       continue;
     }
-    loadedEventNames.add(event.name);
+
+    const handler = (...args) => event.execute(...args);
 
     if (event.once) {
-      client.once(event.name, (...args) => event.execute(...args));
+      client.once(event.name, handler);
     } else {
-      client.on(event.name, (...args) => event.execute(...args));
+      client.on(event.name, handler);
     }
   }
 }

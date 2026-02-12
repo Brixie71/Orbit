@@ -1,30 +1,98 @@
-const { ActivityType, AttachmentBuilder } = require("discord.js");
+// events/ready.js
+const { ActivityType, AttachmentBuilder, PermissionsBitField } = require("discord.js");
 const path = require("path");
 
 const config = require("../config");
 const { createStyledEmbed } = require("../utils/embedCreator");
+const { listInactiveMembers, getMemberLastSeen } = require("../utils/activity");
 
-function safeAttach(filePath, name) {
-  try {
-    const abs = path.join(process.cwd(), filePath);
-    return new AttachmentBuilder(abs, { name });
-  } catch {
-    return null;
-  }
+function safeAttach(filePath, name) { /* keep your existing safeAttach */ }
+
+// helper: ensure role exists
+async function ensureInactiveRole(guild, roleName) {
+  const existing = guild.roles.cache.find(r => r.name === roleName);
+  if (existing) return existing;
+
+  // needs ManageRoles permission for bot
+  return guild.roles.create({
+    name: roleName,
+    reason: "Orbit inactivity role auto-created"
+  });
 }
 
-function buildCompactNotesText(sections, maxLinesPerSection = 3) {
-  return sections
-    .map((s) => {
-      const cleanName = s.name.replace(/^[^a-zA-Z]+/, "").trim(); // remove leading emoji/symbols for tight UI
-      const lines = String(s.value || "")
-        .split("\n")
-        .filter(Boolean)
-        .slice(0, maxLinesPerSection)
-        .join("\n");
-      return `**${cleanName}**\n${lines}`;
-    })
-    .join("\n\n");
+function withPrefix(name, prefix) {
+  if (!name) return prefix.trim();
+  return name.startsWith(prefix) ? name : `${prefix}${name}`;
+}
+
+function stripPrefix(name, prefix) {
+  if (!name) return name;
+  return name.startsWith(prefix) ? name.slice(prefix.length).trimStart() : name;
+}
+
+async function scanGuildForInactive(guild) {
+  const cfg = config.inactivity || {};
+  if (!cfg.enabled) return;
+
+  const thresholdDays = cfg.thresholdDays ?? 30;
+  const prefix = cfg.nicknamePrefix ?? "INACTIVE | ";
+  const roleName = cfg.roleName ?? "INACTIVE";
+
+  const cutoffMs = Date.now() - thresholdDays * 24 * 60 * 60 * 1000;
+
+  // Ensure role
+  const inactiveRole = await ensureInactiveRole(guild, roleName).catch(() => null);
+  if (!inactiveRole) return;
+
+  // Pull “known last seen” members
+  const rows = listInactiveMembers(guild.id, cutoffMs);
+
+  // We’ll also do a light “reactivation” check for members who have the role but are now active
+  const botMe = guild.members.me;
+
+  // Bot needs: ManageNicknames + ManageRoles (and role must be below bot's top role)
+  const canNick =
+    botMe?.permissions?.has(PermissionsBitField.Flags.ManageNicknames);
+  const canRoles =
+    botMe?.permissions?.has(PermissionsBitField.Flags.ManageRoles);
+
+  if (!canRoles) return;
+
+  // Mark inactive
+  for (const r of rows) {
+    const member = await guild.members.fetch(r.user_id).catch(() => null);
+    if (!member || member.user.bot) continue;
+
+    if (!member.roles.cache.has(inactiveRole.id)) {
+      await member.roles.add(inactiveRole, "Marked inactive by Orbit").catch(() => {});
+    }
+
+    if (canNick) {
+      const baseName = member.nickname ?? member.user.username;
+      const nextNick = withPrefix(baseName, prefix).slice(0, 32);
+      if ((member.nickname ?? member.user.username) !== nextNick) {
+        await member.setNickname(nextNick, "Marked inactive by Orbit").catch(() => {});
+      }
+    }
+  }
+
+  // Reactivate: remove role/prefix if last_seen is recent
+  const membersWithRole = inactiveRole.members;
+  for (const member of membersWithRole.values()) {
+    if (member.user.bot) continue;
+
+    const lastSeen = getMemberLastSeen(guild.id, member.id);
+    if (lastSeen && lastSeen > cutoffMs) {
+      await member.roles.remove(inactiveRole, "Reactivated by Orbit").catch(() => {});
+      if (canNick) {
+        const current = member.nickname ?? member.user.username;
+        const nextNick = stripPrefix(current, prefix).slice(0, 32);
+        if ((member.nickname ?? member.user.username) !== nextNick) {
+          await member.setNickname(nextNick, "Reactivated by Orbit").catch(() => {});
+        }
+      }
+    }
+  }
 }
 
 module.exports = {
@@ -34,91 +102,18 @@ module.exports = {
     console.log(`Ready! Logged in as ${client.user.tag}`);
     client.user.setActivity(config.bot.activity, { type: ActivityType.Watching });
 
-    const channelId = process.env.STARTUP_CHANNEL_ID;
-    const channel = client.channels.cache.get(channelId);
-    if (!channel) return;
+    // keep your existing startup embed logic...
 
-    // ============= 1) STARTUP EMBED (single chat) =============
-    const startupEmbed = createStyledEmbed(
-      "✧ ORBIT UPDATED! ✧",
-      "`SYSTEM ONLINE`\n\nOrbit systems have been updated and are now operational.",
-      config.theme.PRIMARY
-    );
+    // ✅ NEW: inactivity scan scheduler
+    const icfg = config.inactivity || {};
+    if (icfg.enabled) {
+      const everyMs = (icfg.scanEveryMinutes ?? 60) * 60_000;
 
-    startupEmbed
-      .setThumbnail(client.user.displayAvatarURL())
-      .addFields(
-        {
-          name: "🔄 STARTUP TIME",
-          value: `\`${new Date().toLocaleString()}\``,
-          inline: true,
-        },
-        {
-          name: "⚙️ VERSION",
-          value: `\`${config.bot.version}\``,
-          inline: true,
-        },
-        {
-          name: "📊 STATUS",
-          value: "`ALL SYSTEMS OPERATIONAL`",
-          inline: true,
+      setInterval(async () => {
+        for (const guild of client.guilds.cache.values()) {
+          await scanGuildForInactive(guild);
         }
-      )
-      .setFooter({
-        text: config.branding.footerText,
-        iconURL: client.user.displayAvatarURL(),
-      })
-      .setTimestamp();
-
-    // Optional startup banner (local file)
-    const startupBanner = safeAttach(config.assets?.startupBannerPath, "startup-banner.png");
-    if (startupBanner) {
-      startupEmbed.setImage("attachment://startup-banner.png");
-      await channel.send({ embeds: [startupEmbed], files: [startupBanner] });
-    } else {
-      await channel.send({ embeds: [startupEmbed] });
+      }, everyMs).unref();
     }
-
-    // ============= 2) NOTES EMBED (separate chat) =============
-    const sections = Array.isArray(config.notes?.sections) ? config.notes.sections : [];
-    const releaseDate = config.notes?.releaseDate ?? "Unknown date";
-
-    const notesEmbed = createStyledEmbed(
-      `📝 ORBIT UPDATE NOTES v${config.bot.version}`,
-      [`Released on **${releaseDate}**`, "", "—"].join("\n"),
-      config.theme.SECONDARY
-    );
-
-    notesEmbed
-      .addFields(
-        {
-          name: "📦 Summary",
-          value: sections.length
-            ? buildCompactNotesText(sections, 3)
-            : "No release notes configured.",
-          inline: false,
-        }
-      )
-      .setFooter({
-        text: config.branding.footerText,
-        iconURL: client.user.displayAvatarURL(),
-      })
-      .setTimestamp();
-
-    // Optional notes banner (local file)
-    const notesBanner = safeAttach(config.assets?.notesBannerPath, "notes-banner.png");
-    if (notesBanner) {
-      notesEmbed.setImage("attachment://notes-banner.png");
-      await channel.send({ embeds: [notesEmbed], files: [notesBanner] });
-    } else {
-      await channel.send({ embeds: [notesEmbed] });
-    }
-  },
-  inactivity: {
-    enabled: true,
-    thresholdDays: 30,
-    scanEveryMinutes: 60,
-    roleName: "INACTIVE",
-    nicknamePrefix: "INACTIVE | "
   },
 };
