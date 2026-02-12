@@ -15,63 +15,29 @@ module.exports = {
   },
 
   bot: {
-    version: "1.1.5", // ✅ bumped for this release
+    version: "1.1.9", // ✅ bumped for this release
     status: "OPERATIONAL",
-    activity: "Orbit Ops Net // Standing by",
-  },
-
-  // Local asset paths (relative to project root)
-  assets: {
-    startupBannerPath: "banner/UDOD_ORBIT.png",
-    notesBannerPath: "banner/UDOD_ORBIT.png",
-    serverBannerPath: "banner/server.png",
+    activity: "Orbit System Operational // Standing by",
   },
 
   // Patch notes used by /notes + startup announcements
   notes: {
-    releaseDate: "January 28, 2026",
+    releaseDate: "February 9, 2026",
     title: "ORBIT UPDATE NOTES",
     sections: [
       {
-        name: "🧾 Startup Notification",
-        value: "• Added Startup Channel Notification",
-      },
-      {
-        name: "🧾 Event Request System",
+        name: "🛰️ Event Requests",
         value:
-          "• Command: /eventrequest\n" +
-          "• Preview → Confirm dispatch flow\n" +
-          "• Cooldowns + duplicate detection\n" +
-          "• Discord timestamp formatting for cross-timezone viewing",
+          "• Server selector now pulls from the SQLite registry with autocomplete\n" +
+          "• Preview shows the chosen server name only for clarity\n" +
+          "• Voice channel selection removed to streamline submissions",
       },
       {
-        name: "🛡️ LinkGuard + Whitelists",
+        name: "🛰️ Server Registry",
         value:
-          "• LinkGuard re-added (domain filtering)\n" +
-          "• Whitelist support restored (trusted media domains)\n" +
-          "• Blacklist enforcement (hard block)",
-      },
-      {
-        name: "🧊 Inactivity Tracking",
-        value:
-          "• Auto-mark inactive members via role + nickname prefix\n" +
-          "• Tracks last activity (server-side) for inactivity evaluation",
-      },
-      {
-        name: "🔒 Safety & Controls",
-        value:
-          "• AllowedMentions hardened\n" +
-          "• Rate-limits on commands",
-      },
-      {
-        name: "🧾 Server List",
-        value:
-          "• Command: /server list\n" +
-          "• Server code selection + registry display",
-      },
-      {
-        name: "🔇 Removed",
-        value: "• Text-to-Speech removed",
+          "• /server add/update/delete/rename manage codes in the SQLite registry\n" +
+          "• Autocomplete for selecting servers on update/delete/rename\n" +
+          "• Registry powers event request server selection",
       },
     ],
   },

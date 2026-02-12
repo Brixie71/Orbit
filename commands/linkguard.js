@@ -87,6 +87,8 @@ module.exports = {
          )
       ),
 
+  ephemeral: true,
+
   async execute(interaction) {
     const sub = interaction.options.getSubcommand();
     const guildId = interaction.guild.id;
