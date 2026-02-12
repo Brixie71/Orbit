@@ -9,6 +9,12 @@ let cachedMatchers = null;
 let cachedAt = 0;
 const CACHE_MS = 5 * 60 * 1000;
 
+function normalizeBlacklistEntryValue(value) {
+  const s = String(value || "").trim().toLowerCase();
+  if (!s || s.startsWith("#")) return "";
+  return s;
+}
+
 function ensureBlacklistFile() {
   const dir = path.dirname(BLACKLIST_FILE_PATH);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -31,12 +37,14 @@ function loadBlacklistedDomains() {
   if (cachedSet && now - cachedAt < CACHE_MS) return cachedSet;
 
   const txt = fs.readFileSync(BLACKLIST_FILE_PATH, "utf8");
-  const entries = txt
-    .split("\n")
-    .map((l) => l.trim().toLowerCase())
-    .filter((l) => l && !l.startsWith("#"));
+  const entries = new Set();
 
-  cachedSet = new Set(entries);
+  for (const line of txt.split(/\r?\n/)) {
+    const entry = normalizeBlacklistEntryValue(line);
+    if (entry) entries.add(entry);
+  }
+
+  cachedSet = entries;
   cachedMatchers = buildBlacklistMatchers(entries);
   cachedAt = now;
   return cachedSet;
@@ -44,7 +52,7 @@ function loadBlacklistedDomains() {
 
 function addDomainToBlacklist(domain) {
   ensureBlacklistFile();
-  const d = domain.trim().toLowerCase();
+  const d = normalizeBlacklistEntryValue(domain);
   if (!d) return false;
 
   const set = loadBlacklistedDomains();
@@ -58,11 +66,13 @@ function addDomainToBlacklist(domain) {
 
 function removeDomainFromBlacklist(domain) {
   ensureBlacklistFile();
-  const d = domain.trim().toLowerCase();
+  const d = normalizeBlacklistEntryValue(domain);
+  if (!d) return false;
+
   const txt = fs.readFileSync(BLACKLIST_FILE_PATH, "utf8");
   const lines = txt.split("\n");
 
-  const idx = lines.findIndex((l) => l.trim().toLowerCase() === d);
+  const idx = lines.findIndex((line) => normalizeBlacklistEntryValue(line) === d);
   if (idx === -1) return false;
 
   lines.splice(idx, 1);
@@ -138,8 +148,8 @@ function getDomainFromUrl(u) {
 function parseBlacklistEntry(entry) {
   if (!entry) return null;
 
-  const raw = entry.trim().toLowerCase();
-  if (!raw || raw.startsWith("#")) return null;
+  const raw = normalizeBlacklistEntryValue(entry);
+  if (!raw) return null;
 
   const hasScheme = raw.includes("://");
   const hasPath = raw.includes("/");
@@ -152,7 +162,7 @@ function parseBlacklistEntry(entry) {
 
       if (!host) return null;
       if (path === "/") return { type: "domain", host };
-      return { type: "path", host, prefix: `${host}${path}` };
+      return { type: "path", host, pathPrefix: path };
     } catch {
       // fall through to domain-only handling
     }
@@ -164,37 +174,55 @@ function parseBlacklistEntry(entry) {
 
 function buildBlacklistMatchers(entries) {
   const domains = new Set();
-  const pathPrefixes = new Set();
+  const pathPrefixesByHost = new Map();
 
   for (const entry of entries) {
     const parsed = parseBlacklistEntry(entry);
     if (!parsed) continue;
     if (parsed.type === "domain") domains.add(parsed.host);
-    if (parsed.type === "path") pathPrefixes.add(parsed.prefix);
+    if (parsed.type === "path") {
+      const arr = pathPrefixesByHost.get(parsed.host) || [];
+      arr.push(parsed.pathPrefix);
+      pathPrefixesByHost.set(parsed.host, arr);
+    }
   }
 
-  return { domains, pathPrefixes };
+  for (const arr of pathPrefixesByHost.values()) {
+    // Longer prefixes first so the most specific match wins.
+    arr.sort((a, b) => b.length - a.length);
+  }
+
+  return { domains, pathPrefixesByHost };
 }
 
 function loadBlacklistMatchers() {
-  if (!cachedMatchers) loadBlacklistedDomains();
-  return cachedMatchers || { domains: new Set(), pathPrefixes: new Set() };
+  loadBlacklistedDomains();
+  return cachedMatchers || { domains: new Set(), pathPrefixesByHost: new Map() };
 }
 
 function findDomainMatch(host, domains) {
   if (!host) return null;
-  const parts = host.split(".");
-  for (let i = 0; i < parts.length; i += 1) {
-    const candidate = parts.slice(i).join(".");
+  if (domains.has(host)) return host;
+
+  // Check parent domains without split/join allocations.
+  let dot = host.indexOf(".");
+  while (dot !== -1) {
+    const candidate = host.slice(dot + 1);
     if (domains.has(candidate)) return candidate;
+    dot = host.indexOf(".", dot + 1);
   }
+
   return null;
 }
 
-function findPathMatch(hostPath, pathPrefixes) {
-  for (const prefix of pathPrefixes) {
-    if (hostPath === prefix || hostPath.startsWith(`${prefix}/`)) return prefix;
+function findPathMatch(host, pathname, pathPrefixesByHost) {
+  const prefixes = pathPrefixesByHost.get(host);
+  if (!prefixes || prefixes.length === 0) return null;
+
+  for (const prefix of prefixes) {
+    if (pathname === prefix || pathname.startsWith(`${prefix}/`)) return `${host}${prefix}`;
   }
+
   return null;
 }
 
@@ -212,7 +240,7 @@ function findBlacklistedUrl(url) {
   const host = normalizeHostname(urlObj.hostname);
   if (!host) return null;
 
-  const { domains, pathPrefixes } = loadBlacklistMatchers();
+  const { domains, pathPrefixesByHost } = loadBlacklistMatchers();
 
   const domainMatch = findDomainMatch(host, domains);
   if (domainMatch) {
@@ -220,8 +248,7 @@ function findBlacklistedUrl(url) {
   }
 
   const pathname = normalizePathname(urlObj.pathname);
-  const hostPath = pathname === "/" ? host : `${host}${pathname}`;
-  const pathMatch = findPathMatch(hostPath, pathPrefixes);
+  const pathMatch = findPathMatch(host, pathname, pathPrefixesByHost);
   if (pathMatch) {
     return { domain: host, url: normalized, match: pathMatch, matchType: "path" };
   }

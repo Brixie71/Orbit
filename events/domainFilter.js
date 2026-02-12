@@ -1,5 +1,6 @@
 // events/domainFilter.js
-const { Events, PermissionFlagsBits } = require("discord.js");
+const { Events, EmbedBuilder, escapeMarkdown } = require("discord.js");
+const config = require("../config");
 const {
   findBlacklistedInMessage,
   extractUrls,
@@ -9,6 +10,110 @@ const {
 const { isDomainWhitelisted } = require("../utils/whitelistManager");
 const store = require("../utils/linkguardStore");
 
+const ORBIT_MOD_FLAG = Symbol.for("orbit.linkguardHandled");
+
+function isUnknownMessageError(err) {
+  return err?.code === 10008 || err?.rawError?.code === 10008;
+}
+
+function isCannotDmUserError(err) {
+  return err?.code === 50007 || err?.rawError?.code === 50007;
+}
+
+async function tryDeleteMessage(message, source) {
+  try {
+    await message.delete();
+    return true;
+  } catch (err) {
+    if (!isUnknownMessageError(err)) {
+      console.error(`${source} delete failed:`, err);
+    }
+    return false;
+  }
+}
+
+async function tryDmBlockedUser(message, reasonText) {
+  const dmOnBlock = config.linkguard?.dmUserOnBlock === true;
+  if (!dmOnBlock) return;
+
+  const guildName = message.guild?.name || "this server";
+  try {
+    await message.author.send(
+      `Your message in **${guildName}** was removed by LinkGuard (${reasonText}).`
+    );
+  } catch (err) {
+    if (!isCannotDmUserError(err)) {
+      console.error("domainFilter DM failed:", err);
+    }
+  }
+}
+
+function formatDiscordDateTime(ms) {
+  const unix = Math.floor((ms || Date.now()) / 1000);
+  return `<t:${unix}:F> | <t:${unix}:R>`;
+}
+
+function buildViolatorContact(user) {
+  const safeId = user?.id || "0";
+  const label = escapeMarkdown(user?.tag || user?.username || "Unknown");
+  return `<@${safeId}>\n[Open Profile / DM](${`https://discord.com/users/${safeId}`})\n\`${label}\``;
+}
+
+function censorLinkForDisplay(url) {
+  const value = String(url || "").trim();
+  if (!value) return "unknown";
+  return value
+    .replace(/^https:\/\//i, "hxxps://")
+    .replace(/^http:\/\//i, "hxxp://")
+    .replace(/\./g, "[.]");
+}
+
+function formatCopyableLink(url) {
+  const value = String(url || "").trim() || "unknown";
+  return `||\`${value.replace(/`/g, "")}\`||`;
+}
+
+function buildLinkguardViolationEmbed(message, blockedUrl) {
+  const sentAt = message.createdTimestamp || Date.now();
+  const safeDisplay = censorLinkForDisplay(blockedUrl);
+
+  return new EmbedBuilder()
+    .setColor(config.theme?.ERROR || "#EF4444")
+    .setTitle("LinkGuard Violation")
+    .setDescription("A blacklisted domain was blocked. Please review.")
+    .addFields(
+      { name: "Violator", value: buildViolatorContact(message.author), inline: true },
+      { name: "Channel", value: `<#${message.channelId}>`, inline: true },
+      { name: "Date and Time", value: formatDiscordDateTime(sentAt), inline: false },
+      {
+        name: "Link",
+        value: `Display: \`${safeDisplay}\`\nCopy: ${formatCopyableLink(blockedUrl)}`,
+        inline: false,
+      }
+    );
+}
+
+async function sendViolationLog(message, payload) {
+  const logChannelId = config.linkguard?.violationLogChannelId;
+  if (!logChannelId) return;
+
+  try {
+    const channel =
+      message.guild.channels.cache.get(logChannelId) ||
+      (await message.guild.channels.fetch(logChannelId).catch(() => null));
+
+    if (!channel || !channel.isTextBased()) return;
+
+    const embed = buildLinkguardViolationEmbed(message, payload?.blockedUrl);
+    await channel.send({
+      embeds: [embed],
+      allowedMentions: { parse: [] },
+    });
+  } catch (err) {
+    console.error("domainFilter log send failed:", err);
+  }
+}
+
 module.exports = {
   name: Events.MessageCreate,
   once: false,
@@ -16,23 +121,27 @@ module.exports = {
     try {
       if (!message.guild) return;
       if (message.author.bot) return;
+      if (message[ORBIT_MOD_FLAG]) return;
 
       const content = message.content || "";
       const member = message.member;
-      const isAdmin =
-        !!member &&
-        (member.permissions.has(PermissionFlagsBits.Administrator) ||
-          member.permissions.has(PermissionFlagsBits.ManageGuild));
+      const warnInChannel = config.linkguard?.warnInChannel !== false;
+      const warnDeleteAfterMs = config.linkguard?.warnDeleteAfterMs ?? 5000;
 
       // 1) Always block blacklisted domains (regardless of LinkGuard on/off)
       const hit = findBlacklistedInMessage(content);
       if (hit) {
-        await message.delete().catch(() => {});
-        if (!isAdmin) {
+        message[ORBIT_MOD_FLAG] = true;
+        await tryDeleteMessage(message, "domainFilter blacklisted");
+        await tryDmBlockedUser(message, "blacklisted domain");
+
+        await sendViolationLog(message, { blockedUrl: hit?.url || "" });
+
+        if (warnInChannel) {
           await message.channel
-            .send("⚠️ The Link you sent is a Blacklisted domain.")
-            .then((m) => setTimeout(() => m.delete().catch(() => {}), 5000))
-            .catch(() => {});
+            .send("The link you sent is a blacklisted domain.")
+            .then((m) => setTimeout(() => m.delete().catch(() => {}), warnDeleteAfterMs))
+            .catch((sendErr) => console.error("domainFilter blacklisted warn send failed:", sendErr));
         }
         return;
       }
@@ -47,7 +156,6 @@ module.exports = {
         channelOverride === null ? serverEnabled : channelOverride;
 
       if (!effectiveEnabled) return;
-
       if (!member) return;
 
       const exemptRoles = store.getExemptRoles(guildId);
@@ -77,13 +185,16 @@ module.exports = {
 
       if (nonWhitelisted.length === 0) return;
 
-      await message.delete().catch(() => {});
+      message[ORBIT_MOD_FLAG] = true;
+      await tryDeleteMessage(message, "domainFilter allowlist");
+      await tryDmBlockedUser(message, "unapproved link");
 
-      // Keep the warning short to avoid spam
-      await message.channel
-        .send(`🛡️ ${message.author} links are blocked here. Use approved media links only.`)
-        .then((m) => setTimeout(() => m.delete().catch(() => {}), 5000))
-        .catch(() => {});
+      if (warnInChannel) {
+        await message.channel
+          .send(`LinkGuard blocked a link from ${message.author}. Use approved media links only.`)
+          .then((m) => setTimeout(() => m.delete().catch(() => {}), warnDeleteAfterMs))
+          .catch((sendErr) => console.error("domainFilter allowlist warn send failed:", sendErr));
+      }
     } catch (err) {
       console.error("domainFilter error:", err);
     }

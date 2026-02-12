@@ -5,6 +5,7 @@ const path = require("path");
 const config = require("../config");
 const { createStyledEmbed } = require("../utils/embedCreator");
 const { listInactiveMembers, getMemberLastSeen } = require("../utils/activity");
+const { initializeWordBlocker } = require("../utils/vectraWordBlocker");
 
 function safeAttach(filePath, name) { /* keep your existing safeAttach */ }
 
@@ -101,6 +102,15 @@ module.exports = {
   async execute(client) {
     console.log(`Ready! Logged in as ${client.user.tag}`);
     client.user.setActivity(config.bot.activity, { type: ActivityType.Watching });
+
+    const wordBlockerStatus = await initializeWordBlocker();
+    if (wordBlockerStatus.enabled) {
+      console.log(
+        `[Vectra] WordBlocker ready. seeds=${wordBlockerStatus.seedCount} threshold=${wordBlockerStatus.scoreThreshold} index=${wordBlockerStatus.indexPath}`
+      );
+    } else {
+      console.log(`[Vectra] WordBlocker disabled (${wordBlockerStatus.reason}).`);
+    }
 
     // keep your existing startup embed logic...
 

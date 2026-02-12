@@ -7,16 +7,22 @@ const {
   loadBlacklistedDomains,
   analyzeURL
 } = require("../utils/domainBlocker");
-const { loadWhitelistedDomains } = require("../utils/whitelistManager");
+const {
+  loadWhitelistedDomains,
+  listWhitelistedDomains,
+  addDomainToWhitelist,
+  removeDomainFromWhitelist
+} = require("../utils/whitelistManager");
+const { setAntiSpam, getGuildSettings } = require("../utils/guildSettings");
 
 function normDomain(input) {
-  return input.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0];
+  return input.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0].split(":")[0];
 }
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("linkguard")
-    .setDescription("LinkGuard: block links + manage blacklist.")
+    .setDescription("LinkGuard: links, whitelist/blacklist, and WordBlocker.")
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
 
     .addSubcommand((s) =>
@@ -27,6 +33,14 @@ module.exports = {
       .addSubcommand((s) =>
         s.setName("activate")
          .setDescription("Enable/disable LinkGuard server-wide.")
+         .addBooleanOption((o) =>
+           o.setName("enabled").setDescription("true=ON, false=OFF").setRequired(true)
+         )
+      )
+
+      .addSubcommand((s) =>
+        s.setName("wordblocker")
+         .setDescription("Enable/disable WordBlocker anti-spam checks.")
          .addBooleanOption((o) =>
            o.setName("enabled").setDescription("true=ON, false=OFF").setRequired(true)
          )
@@ -78,6 +92,27 @@ module.exports = {
            o.setName("domain").setDescription("example.com").setRequired(true)
          )
       )
+
+      .addSubcommand((s) =>
+        s.setName("whitelist")
+         .setDescription("Manage allowed whitelist domains.")
+         .addStringOption((o) =>
+           o.setName("action")
+            .setDescription("Choose add/remove/list")
+            .setRequired(true)
+            .addChoices(
+              { name: "List", value: "list" },
+              { name: "Add", value: "add" },
+              { name: "Remove", value: "remove" }
+            )
+         )
+         .addStringOption((o) =>
+           o
+             .setName("domain")
+             .setDescription("example.com (required for add/remove)")
+             .setRequired(false)
+         )
+      )
       
       .addSubcommand((s) =>
         s.setName("analyze")
@@ -102,6 +137,20 @@ module.exports = {
           new EmbedBuilder()
             .setTitle("LINKGUARD")
             .setDescription(`Server-wide LinkGuard is now **${enabled ? "ON" : "OFF"}**.`)
+            .setColor(enabled ? 0x2ecc71 : 0xe74c3c)
+        ]
+      });
+    }
+
+    if (sub === "wordblocker") {
+      const enabled = interaction.options.getBoolean("enabled", true);
+      setAntiSpam(guildId, enabled);
+
+      return interaction.editReply({
+        embeds: [
+          new EmbedBuilder()
+            .setTitle("WORDBLOCKER")
+            .setDescription(`WordBlocker is now **${enabled ? "ON" : "OFF"}**.`)
             .setColor(enabled ? 0x2ecc71 : 0xe74c3c)
         ]
       });
@@ -166,6 +215,60 @@ module.exports = {
       });
     }
 
+    if (sub === "whitelist") {
+      const action = interaction.options.getString("action", true);
+
+      if (action === "list") {
+        const domains = listWhitelistedDomains();
+        const shown = domains.slice(0, 100);
+        const more = domains.length - shown.length;
+        const desc = shown.length
+          ? `${shown.map((d) => `- \`${d}\``).join("\n")}${more > 0 ? `\n...and ${more} more.` : ""}`
+          : "Whitelist is currently empty.";
+
+        return interaction.editReply({
+          embeds: [
+            new EmbedBuilder()
+              .setTitle("WHITELIST DOMAINS")
+              .setDescription(desc)
+              .setColor(0x2ecc71)
+          ]
+        });
+      }
+
+      const rawDomain = interaction.options.getString("domain", false);
+      if (!rawDomain) {
+        return interaction.editReply({
+          content: "[!] Please provide a domain for `add` or `remove`."
+        });
+      }
+
+      const domain = normDomain(rawDomain);
+      if (!domain) {
+        return interaction.editReply({
+          content: "[!] Please provide a valid domain."
+        });
+      }
+
+      if (action === "add") {
+        const ok = addDomainToWhitelist(domain);
+        return interaction.editReply({
+          content: ok ? `[OK] Whitelisted: \`${domain}\`` : `[!] Already whitelisted: \`${domain}\``
+        });
+      }
+
+      if (action === "remove") {
+        const ok = removeDomainFromWhitelist(domain);
+        return interaction.editReply({
+          content: ok ? `[OK] Removed from whitelist: \`${domain}\`` : `[!] Not found in whitelist: \`${domain}\``
+        });
+      }
+
+      return interaction.editReply({
+        content: "[!] Invalid action. Use `list`, `add`, or `remove`."
+      });
+    }
+
     if (sub === "analyze") {
       const url = interaction.options.getString("url", true).trim();
       const analysis = analyzeURL(url);
@@ -191,6 +294,7 @@ module.exports = {
 
     // status
     const st = store.getStatus(guildId);
+    const gs = getGuildSettings(guildId);
     const bl = loadBlacklistedDomains();
     const wl = loadWhitelistedDomains();
 
@@ -208,6 +312,7 @@ module.exports = {
           .setColor(0x5865f2)
           .addFields(
             { name: "Server-wide", value: st.enabled ? "✅ ON" : "❌ OFF", inline: true },
+            { name: "WordBlocker", value: gs.antispam_enabled ? "ON" : "OFF", inline: true },
             { name: "Channel overrides", value: chOverrides, inline: false },
             { name: "Exempt roles", value: exempt, inline: false },
             { name: "Restricted roles", value: restrict, inline: false },
