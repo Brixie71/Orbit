@@ -18,6 +18,7 @@ pids
 *.pid
 *.seed
 *.pid.lock
+data/blacklist_domains.txt
 
 # Coverage
 lib-cov
