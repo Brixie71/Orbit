@@ -1,17 +1,55 @@
+# GOOGLE
 docs.google.com
 drive.google.com
 forms.gle
 sites.google.com
 googleusercontent.com
+
+# YOUTUBE
 youtube.com
 youtu.be
+youtube-nocookie.com
+ytimg.com
+
+# TWITCH
 twitch.tv
+clips.twitch.tv
+
+# DISCORD
 discord.gg
 discord.com
 cdn.discordapp.com
 media.discordapp.net
+
+# TENOR
 tenor.com
+media.tenor.com
+c.tenor.com
+
+# IMGUR
 imgur.com
+i.imgur.com
+m.imgur.com
+
+# GIPHY
+giphy.com
+media.giphy.com
+i.giphy.com
+giphyusercontent.com
+klipy.com
+
+# GYAZO
 gyazo.com
+i.gyazo.com
+
+# AUDIO
 soundcloud.com
 spotify.com
+open.spotify.com
+
+# REDDIT MEDIA
+redd.it
+reddit.com
+v.redd.it
+preview.redd.it
+i.redd.it
