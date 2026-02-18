@@ -4,7 +4,7 @@ const store = require("../utils/linkguardStore");
 const {
   addDomainToBlacklist,
   removeDomainFromBlacklist,
-  loadBlacklistedDomains,
+  getBlacklistedDomainCount,
   analyzeURL
 } = require("../utils/domainBlocker");
 const {
@@ -295,7 +295,7 @@ module.exports = {
     // status
     const st = store.getStatus(guildId);
     const gs = getGuildSettings(guildId);
-    const bl = loadBlacklistedDomains();
+    const blacklistedCount = getBlacklistedDomainCount();
     const wl = loadWhitelistedDomains();
 
     const chOverrides = Object.entries(st.channels || {})
@@ -316,7 +316,7 @@ module.exports = {
             { name: "Channel overrides", value: chOverrides, inline: false },
             { name: "Exempt roles", value: exempt, inline: false },
             { name: "Restricted roles", value: restrict, inline: false },
-            { name: "Blacklist domains", value: `\`${bl.size}\``, inline: true },
+            { name: "Blacklist domains", value: `\`${blacklistedCount}\``, inline: true },
             { name: "Whitelist domains", value: `\`${wl.size}\``, inline: true }
           )
       ]

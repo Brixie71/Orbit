@@ -18,6 +18,9 @@ pids
 *.pid
 *.seed
 *.pid.lock
+core
+core.*
+*.core
 data/blacklist_domains.txt
 
 # Coverage

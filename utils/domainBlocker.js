@@ -1,13 +1,71 @@
 // utils/domainBlocker.js
 const fs = require("fs");
 const path = require("path");
+const db = require("./db");
 
 const BLACKLIST_FILE_PATH = path.join(__dirname, "../data/blacklist_domains.txt");
+const BLACKLIST_DB_TABLE = "domain_blacklist_entries";
+const BLACKLIST_META_TABLE = "domain_blacklist_meta";
+const READ_CHUNK_SIZE = 1024 * 1024;
 
-let cachedSet = null;
-let cachedMatchers = null;
-let cachedAt = 0;
-const CACHE_MS = 5 * 60 * 1000;
+let cachedSignature = null;
+
+db.exec(`
+CREATE TABLE IF NOT EXISTS ${BLACKLIST_DB_TABLE} (
+  entry TEXT PRIMARY KEY,
+  host TEXT NOT NULL,
+  path_prefix TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_${BLACKLIST_DB_TABLE}_host
+  ON ${BLACKLIST_DB_TABLE} (host);
+
+CREATE TABLE IF NOT EXISTS ${BLACKLIST_META_TABLE} (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  file_signature TEXT NOT NULL,
+  total_count INTEGER NOT NULL DEFAULT 0,
+  synced_at INTEGER NOT NULL
+);
+`);
+
+const getMetaStmt = db.prepare(
+  `SELECT file_signature, total_count FROM ${BLACKLIST_META_TABLE} WHERE id = 1`
+);
+const upsertMetaStmt = db.prepare(`
+INSERT INTO ${BLACKLIST_META_TABLE} (id, file_signature, total_count, synced_at)
+VALUES (1, ?, ?, ?)
+ON CONFLICT(id) DO UPDATE SET
+  file_signature = excluded.file_signature,
+  total_count = excluded.total_count,
+  synced_at = excluded.synced_at
+`);
+const clearEntriesStmt = db.prepare(`DELETE FROM ${BLACKLIST_DB_TABLE}`);
+const insertEntryStmt = db.prepare(`
+INSERT OR IGNORE INTO ${BLACKLIST_DB_TABLE} (entry, host, path_prefix)
+VALUES (?, ?, ?)
+`);
+const countEntriesStmt = db.prepare(`SELECT COUNT(*) AS count FROM ${BLACKLIST_DB_TABLE}`);
+const hasDomainStmt = db.prepare(`
+SELECT 1
+FROM ${BLACKLIST_DB_TABLE}
+WHERE host = ? AND path_prefix IS NULL
+LIMIT 1
+`);
+const hasExactEntryStmt = db.prepare(`
+SELECT 1
+FROM ${BLACKLIST_DB_TABLE}
+WHERE entry = ?
+LIMIT 1
+`);
+const deleteExactEntryStmt = db.prepare(`
+DELETE FROM ${BLACKLIST_DB_TABLE}
+WHERE entry = ?
+`);
+const selectPathPrefixesStmt = db.prepare(`
+SELECT path_prefix
+FROM ${BLACKLIST_DB_TABLE}
+WHERE host = ? AND path_prefix IS NOT NULL
+ORDER BY LENGTH(path_prefix) DESC
+`);
 
 function normalizeBlacklistEntryValue(value) {
   const s = String(value || "").trim().toLowerCase();
@@ -25,67 +83,174 @@ function ensureBlacklistFile() {
       "discord-nitro.ru",
       "free-nitro.com",
       "steamcommunnitty.ru",
-      "discordgift.co"
+      "discordgift.co",
     ].join("\n");
     fs.writeFileSync(BLACKLIST_FILE_PATH, defaultDomains, "utf8");
   }
 }
 
-function loadBlacklistedDomains() {
+function getBlacklistFileSignature() {
+  const stats = fs.statSync(BLACKLIST_FILE_PATH);
+  return `${stats.size}:${Math.trunc(stats.mtimeMs)}`;
+}
+
+function forEachBlacklistLineSync(filePath, onLine) {
+  const fd = fs.openSync(filePath, "r");
+  const buffer = Buffer.allocUnsafe(READ_CHUNK_SIZE);
+  let leftover = "";
+
+  try {
+    while (true) {
+      const bytesRead = fs.readSync(fd, buffer, 0, READ_CHUNK_SIZE, null);
+      if (bytesRead <= 0) break;
+
+      const chunk = leftover + buffer.toString("utf8", 0, bytesRead);
+      const lines = chunk.split("\n");
+      leftover = lines.pop() || "";
+
+      for (const rawLine of lines) {
+        const line = rawLine.endsWith("\r") ? rawLine.slice(0, -1) : rawLine;
+        onLine(line);
+      }
+    }
+
+    if (leftover) {
+      const line = leftover.endsWith("\r") ? leftover.slice(0, -1) : leftover;
+      onLine(line);
+    }
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+function entryToStorageKey(entry) {
+  if (!entry) return "";
+  if (entry.type === "path") return `${entry.host}${entry.pathPrefix}`;
+  return entry.host;
+}
+
+const rebuildBlacklistIndexTx = db.transaction((fileSignature) => {
+  clearEntriesStmt.run();
+
+  let inserted = 0;
+  forEachBlacklistLineSync(BLACKLIST_FILE_PATH, (line) => {
+    const normalized = normalizeBlacklistEntryValue(line);
+    if (!normalized) return;
+
+    const parsed = parseBlacklistEntry(normalized);
+    if (!parsed) return;
+
+    const key = entryToStorageKey(parsed);
+    const pathPrefix = parsed.type === "path" ? parsed.pathPrefix : null;
+    inserted += insertEntryStmt.run(key, parsed.host, pathPrefix).changes;
+  });
+
+  upsertMetaStmt.run(fileSignature, inserted, Date.now());
+});
+
+function ensureBlacklistIndexUpToDate() {
   ensureBlacklistFile();
-  const now = Date.now();
-  if (cachedSet && now - cachedAt < CACHE_MS) return cachedSet;
+  const signature = getBlacklistFileSignature();
+  if (signature === cachedSignature) return;
 
-  const txt = fs.readFileSync(BLACKLIST_FILE_PATH, "utf8");
-  const entries = new Set();
-
-  for (const line of txt.split(/\r?\n/)) {
-    const entry = normalizeBlacklistEntryValue(line);
-    if (entry) entries.add(entry);
+  const meta = getMetaStmt.get();
+  if (meta?.file_signature === signature) {
+    cachedSignature = signature;
+    return;
   }
 
-  cachedSet = entries;
-  cachedMatchers = buildBlacklistMatchers(entries);
-  cachedAt = now;
-  return cachedSet;
+  rebuildBlacklistIndexTx(signature);
+  cachedSignature = signature;
+}
+
+function getBlacklistedDomainCount() {
+  ensureBlacklistIndexUpToDate();
+  return countEntriesStmt.get().count;
+}
+
+function loadBlacklistedDomains() {
+  // Backwards-compatible shape for existing status display usage (.size).
+  return { size: getBlacklistedDomainCount() };
 }
 
 function addDomainToBlacklist(domain) {
   ensureBlacklistFile();
-  const d = normalizeBlacklistEntryValue(domain);
-  if (!d) return false;
+  const normalized = normalizeBlacklistEntryValue(domain);
+  if (!normalized) return false;
 
-  const set = loadBlacklistedDomains();
-  if (set.has(d)) return false;
+  const parsed = parseBlacklistEntry(normalized);
+  if (!parsed) return false;
 
-  fs.appendFileSync(BLACKLIST_FILE_PATH, `\n${d}`, "utf8");
-  cachedSet = null;
-  cachedMatchers = null;
+  ensureBlacklistIndexUpToDate();
+
+  const key = entryToStorageKey(parsed);
+  if (hasExactEntryStmt.get(key)) return false;
+
+  fs.appendFileSync(BLACKLIST_FILE_PATH, `\n${normalized}`, "utf8");
+  insertEntryStmt.run(key, parsed.host, parsed.type === "path" ? parsed.pathPrefix : null);
+
+  const signature = getBlacklistFileSignature();
+  const total = countEntriesStmt.get().count;
+  upsertMetaStmt.run(signature, total, Date.now());
+  cachedSignature = signature;
+  return true;
+}
+
+function removeEntryFromBlacklistFile(normalizedEntry) {
+  const tmpPath = `${BLACKLIST_FILE_PATH}.tmp`;
+  const outFd = fs.openSync(tmpPath, "w");
+  let removed = false;
+  let wroteLine = false;
+
+  try {
+    forEachBlacklistLineSync(BLACKLIST_FILE_PATH, (line) => {
+      const normalizedLine = normalizeBlacklistEntryValue(line);
+      if (!removed && normalizedLine === normalizedEntry) {
+        removed = true;
+        return;
+      }
+
+      const chunk = wroteLine ? `\n${line}` : line;
+      fs.writeSync(outFd, chunk);
+      wroteLine = true;
+    });
+  } finally {
+    fs.closeSync(outFd);
+  }
+
+  if (!removed) {
+    fs.unlinkSync(tmpPath);
+    return false;
+  }
+
+  fs.renameSync(tmpPath, BLACKLIST_FILE_PATH);
   return true;
 }
 
 function removeDomainFromBlacklist(domain) {
   ensureBlacklistFile();
-  const d = normalizeBlacklistEntryValue(domain);
-  if (!d) return false;
+  const normalized = normalizeBlacklistEntryValue(domain);
+  if (!normalized) return false;
 
-  const txt = fs.readFileSync(BLACKLIST_FILE_PATH, "utf8");
-  const lines = txt.split("\n");
+  const parsed = parseBlacklistEntry(normalized);
+  if (!parsed) return false;
 
-  const idx = lines.findIndex((line) => normalizeBlacklistEntryValue(line) === d);
-  if (idx === -1) return false;
+  ensureBlacklistIndexUpToDate();
+  if (!removeEntryFromBlacklistFile(normalized)) return false;
 
-  lines.splice(idx, 1);
-  fs.writeFileSync(BLACKLIST_FILE_PATH, lines.join("\n"), "utf8");
-  cachedSet = null;
-  cachedMatchers = null;
+  const key = entryToStorageKey(parsed);
+  deleteExactEntryStmt.run(key);
+
+  const signature = getBlacklistFileSignature();
+  const total = countEntriesStmt.get().count;
+  upsertMetaStmt.run(signature, total, Date.now());
+  cachedSignature = signature;
   return true;
 }
 
 function extractUrls(text) {
   if (!text) return [];
-  const urlRegex =
-    /\bhttps?:\/\/[^\s<]+|\bwww\.[^\s<]+/gi;
+  const urlRegex = /\bhttps?:\/\/[^\s<]+|\bwww\.[^\s<]+/gi;
   const bareDomainRegex =
     /\b(?:[a-z0-9-]+\.)+[a-z]{2,}(?::\d{2,5})?(?:\/[^\s<]*)?/gi;
 
@@ -158,11 +323,11 @@ function parseBlacklistEntry(entry) {
     try {
       const url = new URL(hasScheme ? raw : `https://${raw}`);
       const host = normalizeHostname(url.hostname);
-      const path = normalizePathname(url.pathname);
+      const pathValue = normalizePathname(url.pathname);
 
       if (!host) return null;
-      if (path === "/") return { type: "domain", host };
-      return { type: "path", host, pathPrefix: path };
+      if (pathValue === "/") return { type: "domain", host };
+      return { type: "path", host, pathPrefix: pathValue };
     } catch {
       // fall through to domain-only handling
     }
@@ -172,55 +337,30 @@ function parseBlacklistEntry(entry) {
   return host ? { type: "domain", host } : null;
 }
 
-function buildBlacklistMatchers(entries) {
-  const domains = new Set();
-  const pathPrefixesByHost = new Map();
-
-  for (const entry of entries) {
-    const parsed = parseBlacklistEntry(entry);
-    if (!parsed) continue;
-    if (parsed.type === "domain") domains.add(parsed.host);
-    if (parsed.type === "path") {
-      const arr = pathPrefixesByHost.get(parsed.host) || [];
-      arr.push(parsed.pathPrefix);
-      pathPrefixesByHost.set(parsed.host, arr);
-    }
-  }
-
-  for (const arr of pathPrefixesByHost.values()) {
-    // Longer prefixes first so the most specific match wins.
-    arr.sort((a, b) => b.length - a.length);
-  }
-
-  return { domains, pathPrefixesByHost };
-}
-
-function loadBlacklistMatchers() {
-  loadBlacklistedDomains();
-  return cachedMatchers || { domains: new Set(), pathPrefixesByHost: new Map() };
-}
-
-function findDomainMatch(host, domains) {
+function findDomainMatch(host) {
   if (!host) return null;
-  if (domains.has(host)) return host;
+  if (hasDomainStmt.get(host)) return host;
 
   // Check parent domains without split/join allocations.
   let dot = host.indexOf(".");
   while (dot !== -1) {
     const candidate = host.slice(dot + 1);
-    if (domains.has(candidate)) return candidate;
+    if (hasDomainStmt.get(candidate)) return candidate;
     dot = host.indexOf(".", dot + 1);
   }
 
   return null;
 }
 
-function findPathMatch(host, pathname, pathPrefixesByHost) {
-  const prefixes = pathPrefixesByHost.get(host);
-  if (!prefixes || prefixes.length === 0) return null;
+function findPathMatch(host, pathname) {
+  const rows = selectPathPrefixesStmt.all(host);
+  if (!rows.length) return null;
 
-  for (const prefix of prefixes) {
-    if (pathname === prefix || pathname.startsWith(`${prefix}/`)) return `${host}${prefix}`;
+  for (const row of rows) {
+    const prefix = row.path_prefix;
+    if (pathname === prefix || pathname.startsWith(`${prefix}/`)) {
+      return `${host}${prefix}`;
+    }
   }
 
   return null;
@@ -240,15 +380,15 @@ function findBlacklistedUrl(url) {
   const host = normalizeHostname(urlObj.hostname);
   if (!host) return null;
 
-  const { domains, pathPrefixesByHost } = loadBlacklistMatchers();
+  ensureBlacklistIndexUpToDate();
 
-  const domainMatch = findDomainMatch(host, domains);
+  const domainMatch = findDomainMatch(host);
   if (domainMatch) {
     return { domain: host, url: normalized, match: domainMatch, matchType: "domain" };
   }
 
   const pathname = normalizePathname(urlObj.pathname);
-  const pathMatch = findPathMatch(host, pathname, pathPrefixesByHost);
+  const pathMatch = findPathMatch(host, pathname);
   if (pathMatch) {
     return { domain: host, url: normalized, match: pathMatch, matchType: "path" };
   }
@@ -298,6 +438,7 @@ function findBlacklistedInMessage(messageContent) {
 module.exports = {
   BLACKLIST_FILE_PATH,
   loadBlacklistedDomains,
+  getBlacklistedDomainCount,
   addDomainToBlacklist,
   removeDomainFromBlacklist,
   extractUrls,
@@ -305,5 +446,5 @@ module.exports = {
   getDomainFromUrl,
   analyzeURL,
   findBlacklistedUrl,
-  findBlacklistedInMessage
+  findBlacklistedInMessage,
 };
