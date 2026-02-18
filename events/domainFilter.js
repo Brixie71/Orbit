@@ -1,5 +1,5 @@
 // events/domainFilter.js
-const { Events, EmbedBuilder, escapeMarkdown } = require("discord.js");
+const { Events, EmbedBuilder, PermissionFlagsBits, escapeMarkdown } = require("discord.js");
 const config = require("../config");
 const {
   findBlacklistedInMessage,
@@ -73,14 +73,17 @@ function formatCopyableLink(url) {
   return `||\`${value.replace(/`/g, "")}\`||`;
 }
 
-function buildLinkguardViolationEmbed(message, blockedUrl) {
+function buildLinkguardViolationEmbed(message, payload) {
   const sentAt = message.createdTimestamp || Date.now();
+  const blockedUrl = payload?.blockedUrl || "";
   const safeDisplay = censorLinkForDisplay(blockedUrl);
+  const reasonText = payload?.reasonText || "Blocked link detected.";
+  const titleText = payload?.title || "LinkGuard Violation";
 
   return new EmbedBuilder()
     .setColor(config.theme?.ERROR || "#EF4444")
-    .setTitle("LinkGuard Violation")
-    .setDescription("A blacklisted domain was blocked. Please review.")
+    .setTitle(titleText)
+    .setDescription(reasonText)
     .addFields(
       { name: "Violator", value: buildViolatorContact(message.author), inline: true },
       { name: "Channel", value: `<#${message.channelId}>`, inline: true },
@@ -93,18 +96,55 @@ function buildLinkguardViolationEmbed(message, blockedUrl) {
     );
 }
 
+async function resolveLogChannel(message, logChannelId) {
+  if (!logChannelId) return null;
+
+  const channel =
+    message.client.channels.cache.get(logChannelId) ||
+    (await message.client.channels.fetch(logChannelId).catch(() => null));
+
+  if (!channel) {
+    console.error(
+      `domainFilter log channel not found: ${logChannelId} (guild=${message.guildId})`
+    );
+    return null;
+  }
+
+  if (!channel.isTextBased()) {
+    console.error(`domainFilter log channel is not text-based: ${logChannelId}`);
+    return null;
+  }
+
+  if (channel.guildId && channel.guildId !== message.guildId) {
+    console.error(
+      `domainFilter log channel is in a different guild: channelGuild=${channel.guildId} messageGuild=${message.guildId}`
+    );
+    return null;
+  }
+
+  return channel;
+}
+
 async function sendViolationLog(message, payload) {
   const logChannelId = config.linkguard?.violationLogChannelId;
   if (!logChannelId) return;
 
   try {
-    const channel =
-      message.guild.channels.cache.get(logChannelId) ||
-      (await message.guild.channels.fetch(logChannelId).catch(() => null));
+    const channel = await resolveLogChannel(message, logChannelId);
+    if (!channel) return;
+    const perms = channel.permissionsFor(message.guild?.members?.me);
+    const missingPerms = [];
+    if (!perms?.has(PermissionFlagsBits.ViewChannel)) missingPerms.push("ViewChannel");
+    if (!perms?.has(PermissionFlagsBits.SendMessages)) missingPerms.push("SendMessages");
+    if (!perms?.has(PermissionFlagsBits.EmbedLinks)) missingPerms.push("EmbedLinks");
+    if (missingPerms.length > 0) {
+      console.error(
+        `domainFilter missing log channel permissions (${logChannelId}): ${missingPerms.join(", ")}`
+      );
+      return;
+    }
 
-    if (!channel || !channel.isTextBased()) return;
-
-    const embed = buildLinkguardViolationEmbed(message, payload?.blockedUrl);
+    const embed = buildLinkguardViolationEmbed(message, payload);
     await channel.send({
       embeds: [embed],
       allowedMentions: { parse: [] },
@@ -135,7 +175,11 @@ module.exports = {
         await tryDeleteMessage(message, "domainFilter blacklisted");
         await tryDmBlockedUser(message, "blacklisted domain");
 
-        await sendViolationLog(message, { blockedUrl: hit?.url || "" });
+        await sendViolationLog(message, {
+          blockedUrl: hit?.url || "",
+          title: "LinkGuard Violation",
+          reasonText: "A blacklisted domain was blocked. Please review.",
+        });
 
         if (warnInChannel) {
           await message.channel
@@ -188,6 +232,12 @@ module.exports = {
       message[ORBIT_MOD_FLAG] = true;
       await tryDeleteMessage(message, "domainFilter allowlist");
       await tryDmBlockedUser(message, "unapproved link");
+
+      await sendViolationLog(message, {
+        blockedUrl: nonWhitelisted[0] || "",
+        title: "LinkGuard Allowlist Block",
+        reasonText: "A non-whitelisted link was blocked by LinkGuard.",
+      });
 
       if (warnInChannel) {
         await message.channel

@@ -36,7 +36,12 @@ giphy.com
 media.giphy.com
 i.giphy.com
 giphyusercontent.com
+
+# KLIPY
 klipy.com
+www.klipy.com
+cdn.klipy.com
+media.klipy.com
 
 # GYAZO
 gyazo.com
@@ -53,3 +58,14 @@ reddit.com
 v.redd.it
 preview.redd.it
 i.redd.it
+
+# INSTAGRAM
+instagram.com
+www.instagram.com
+m.instagram.com
+l.instagram.com
+instagr.am
+cdninstagram.com
+scontent.cdninstagram.com
+fbcdn.net
+scontent.xx.fbcdn.net

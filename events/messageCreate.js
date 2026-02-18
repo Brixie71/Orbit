@@ -64,11 +64,12 @@ function buildWordBlockerViolationEmbed(message, payload) {
   const word = sanitizeWordValue(payload?.word);
   const scorePct = Math.round((payload?.score || 0) * 100);
   const scoreSuffix = Number.isFinite(scorePct) ? ` (${scorePct}% match)` : "";
+  const reasonText = String(payload?.reason || "Blocked by WordBlocker.").trim();
 
   return new EmbedBuilder()
     .setColor(config.theme?.WARNING || "#FACC15")
     .setTitle("WordBlocker Violation")
-    .setDescription("A blocked word/similar phrase was detected. Please review.")
+    .setDescription(reasonText)
     .addFields(
       { name: "Violator", value: buildViolatorContact(message.author), inline: true },
       { name: "Channel", value: `<#${message.channelId}>`, inline: true },
@@ -77,16 +78,54 @@ function buildWordBlockerViolationEmbed(message, payload) {
     );
 }
 
+async function resolveLogChannel(message, logChannelId) {
+  if (!logChannelId) return null;
+
+  const channel =
+    message.client.channels.cache.get(logChannelId) ||
+    (await message.client.channels.fetch(logChannelId).catch(() => null));
+
+  if (!channel) {
+    console.error(
+      `messageCreate log channel not found: ${logChannelId} (guild=${message.guildId})`
+    );
+    return null;
+  }
+
+  if (!channel.isTextBased()) {
+    console.error(`messageCreate log channel is not text-based: ${logChannelId}`);
+    return null;
+  }
+
+  if (channel.guildId && channel.guildId !== message.guildId) {
+    console.error(
+      `messageCreate log channel is in a different guild: channelGuild=${channel.guildId} messageGuild=${message.guildId}`
+    );
+    return null;
+  }
+
+  return channel;
+}
+
 async function sendViolationLog(message, payload) {
   const logChannelId = config.linkguard?.violationLogChannelId;
   if (!logChannelId) return;
 
   try {
-    const channel =
-      message.guild.channels.cache.get(logChannelId) ||
-      (await message.guild.channels.fetch(logChannelId).catch(() => null));
+    const channel = await resolveLogChannel(message, logChannelId);
+    if (!channel) return;
+    const perms = channel.permissionsFor(message.guild?.members?.me);
+    const missingPerms = [];
+    if (!perms?.has(PermissionFlagsBits.ViewChannel)) missingPerms.push("ViewChannel");
+    if (!perms?.has(PermissionFlagsBits.SendMessages)) missingPerms.push("SendMessages");
+    if (!perms?.has(PermissionFlagsBits.EmbedLinks)) missingPerms.push("EmbedLinks");
+    if (missingPerms.length > 0) {
+      console.error(
+        `messageCreate missing log channel permissions (${logChannelId}): ${missingPerms.join(", ")}`
+      );
+      return;
+    }
 
-    if (!channel || !channel.isTextBased()) return;
     const embed = buildWordBlockerViolationEmbed(message, payload);
     await channel.send({
       embeds: [embed],
@@ -172,12 +211,11 @@ module.exports = {
 
     await tryDmBlockedUser(message, reason);
 
-    if (isSemanticSpam) {
-      await sendViolationLog(message, {
-        word: semanticHit?.phrase || text,
-        score: semanticHit?.score || 0,
-      });
-    }
+    await sendViolationLog(message, {
+      word: isSemanticSpam ? semanticHit?.phrase || text : reason,
+      score: isSemanticSpam ? semanticHit?.score || 0 : 0,
+      reason: `WordBlocker removed a message for: ${reason}.`,
+    });
 
     if (warnInChannel) {
       try {
