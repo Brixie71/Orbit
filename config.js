@@ -1,4 +1,4 @@
-// config.js (ORBIT v1.1.10)
+// config.js (ORBIT v1.1.11)
 module.exports = {
   theme: {
     PRIMARY: "#0B1220",
@@ -15,38 +15,23 @@ module.exports = {
   },
 
   bot: {
-    version: "1.1.10",
+    version: "1.1.11",
     status: "OPERATIONAL",
     activity: "Orbit System Operational // Standing by",
   },
 
   // Patch notes used by /notes + startup announcements
   notes: {
-    releaseDate: "February 12, 2026",
+    releaseDate: "February 24, 2026",
     title: "ORBIT UPDATE NOTES",
     sections: [
       {
-        name: "1.1.10 - Improved LinkGuard Performance",
+        name: "1.1.11 - LinkGuard Cleanup",
         value:
-          "- Added structured moderation log embeds for LinkGuard and WordBlocker\n" +
-          "- Violator field now includes a clickable mention and profile/DM shortcut\n" +
-          "- Added channel and Discord timestamp details for faster HR review\n" +
-          "- Link logging now shows a censored display value with a copy-ready entry\n" +
-          "- Reduced moderation noise by handling duplicate delete race (10008) safely",
-      },
-      {
-        name: "Event Requests",
-        value:
-          "- Server selector now pulls from the SQLite registry with autocomplete\n" +
-          "- Preview shows the chosen server name only for clarity\n" +
-          "- Voice channel selection removed to streamline submissions",
-      },
-      {
-        name: "Server Registry",
-        value:
-          "- /server add/update/delete/rename manage codes in the SQLite registry\n" +
-          "- Autocomplete for selecting servers on update/delete/rename\n" +
-          "- Registry powers event request server selection",
+          "- Removed WordBlocker/semantic spam checks; LinkGuard now only manages links\n" +
+          "- Pruned Vectra dependency and word similarity assets\n" +
+          "- MessageCreate now only tracks activity for inactivity scans\n" +
+          "- /linkguard status no longer shows WordBlocker controls",
       },
     ],
   },
@@ -86,23 +71,11 @@ module.exports = {
     // Optional: show short warning message in channel after deletion
     warnInChannel: true,
     warnDeleteAfterMs: 5000,
-    // Optional: DM users when their message is blocked by LinkGuard/WordBlocker
+    // Optional: DM users when their message is blocked by LinkGuard
     dmUserOnBlock: false,
-    // Optional: moderation log channel for LinkGuard + WordBlocker violations
+    // Optional: moderation log channel for LinkGuard violations
     // Put your channel ID here (as a string).
     violationLogChannelId: "1471586355602788493",
   },
 
-  // Optional Vectra-backed similarity checks for WordBlocker.
-  // This augments anti-spam and stays fully local (file-based index).
-  wordBlocker: {
-    enabled: true,
-    scoreThreshold: 0.6,
-    minTextLength: 4,
-    topK: 1,
-    vectorDimensions: 384,
-    ngramSize: 3,
-    indexPath: "./data/vectra/word_blocker",
-    seedsFile: "./data/word_similarity.txt",
-  },
 };
